@@ -1,0 +1,56 @@
+Shader "Unlit/ZTestFighting"
+{
+    Properties
+    {
+        _Color("Color", Color)=(1,1,1,1)
+        _OffsetFactor("OffsetFactor", Float)=0
+        _OffsetUnits("OffsetUnits", Float)=0
+    }
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" "Queue"="Transparent+200"}
+        //离camera的距离越近，数值越小，越靠前
+        Offset [_OffsetFactor],[_OffsetUnits]
+      
+        Pass
+        {
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+                float3 normal : NORMAL;
+            };
+
+            struct v2f
+            {
+                float2 uv : TEXCOORD0;
+                float4 vertex : SV_POSITION;
+                float3 normal : TEXCOORD1;
+            };
+
+            CBUFFER_START(UnityPerMaterial)
+            float4 _Color;
+            CBUFFER_END
+
+            v2f vert (appdata v)
+            {
+                v2f o;
+                o.vertex = TransformObjectToHClip(v.vertex.xyz);
+                o.uv = v.uv;
+                o.normal=TransformObjectToWorldNormal(v.normal);
+                return o;
+            }
+
+            float4 frag (v2f i) : SV_Target
+            { 
+                return _Color;
+            }
+            ENDHLSL
+        }
+    }
+}

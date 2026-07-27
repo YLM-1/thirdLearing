@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Wobble
+  m_Shader: {fileID: 4800000, guid: 2d04a65bd1db2f44ba781a239775a293, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _BottleRimIntensity: 8.8
+    - _BottleRimPower: 10.8
+    - _BottleSpecularIntensity: 28.9
+    - _BottleSpecularPower: 69.9
+    - _BottleThickness: 0.0137
+    - _FillAmount: 0.559
+    - _LiquidFoamHeight: 0.032
+    - _LiquidRimIntensity: 39.6
+    - _LiquidRimPower: 6.5
+    - _SpecularIntensity: 7.4
+    - _SpecularPower: 24.3
+    - _WobbleX: -8.4
+    - _WobbleZ: 9.1
+    m_Colors:
+    - _BottleColor: {r: 1, g: 0.65609986, b: 0.40784308, a: 0.53333336}
+    - _LiquidColor: {r: 0, g: 0.6607187, b: 0.7924528, a: 0}
+    - _LiquidFoam: {r: 1, g: 1, b: 1, a: 1}
+    - _LiquidFoamColor: {r: 0, g: 0.83168316, b: 1, a: 0}
+    - _LiquidTop: {r: 1, g: 1, b: 1, a: 1}
+    - _LiquidTopColor: {r: 0.4353071, g: 0.81603056, b: 0.8930817, a: 0}
+  m_BuildTextureStacks: []

@@ -1,0 +1,86 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Water
+  m_Shader: {fileID: 4800000, guid: db67ced6c4faeb448a33f8b69b456275, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ReflectionTexture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _RefractTexture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SparkleMap:
+        m_Texture: {fileID: 2800000, guid: 4789b1e439e3b294e972b2f82ff1878d, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SparkleTexture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _WaveNormalMap:
+        m_Texture: {fileID: 2800000, guid: 44c024f168b8434429aa4ae6ef769118, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _Amplitude: 96
+    - _Amplitude0: 0
+    - _Amplitude1: 2
+    - _DepthDensity: 0.004
+    - _EdgeFoamDepth: 0.04
+    - _FresnelIntensity: 0.15
+    - _FresnelPower: 5
+    - _ReflectionDistortion: 0.02
+    - _RefractStrength: 0.043
+    - _SparkleAmplitude: 6.18
+    - _SparkleIntensity: 3
+    - _SparklePower: 8
+    - _SparkleScale: 0.1
+    - _SparkleSpeed: 0.0124
+    - _SpecularIntensity: 0.1
+    - _SpecularPower: 4.1
+    - _SssIntensity: 1
+    - _SssPower: 10
+    - _Wave0Direction: 0.064
+    - _Wave0Length: 18.9
+    - _Wave0Speed: 2.7
+    - _Wave1Direction: 0.155
+    - _Wave1Length: 27.8
+    - _Wave1Speed: 3.4
+    - _WaveLength: 3.5
+    - _WaveNormalScale: 6.6
+    - _WaveNormalSpeed: 0.0136
+    - _WaveSpeed: 4
+    m_Colors:
+    - _DepthColor: {r: 0, g: 0.11301806, b: 0.34591186, a: 1}
+    - _EdgeFoamColor: {r: 1, g: 1, b: 1, a: 1}
+    - _ShallowColor: {r: 0, g: 0.735849, b: 0.35567072, a: 1}
+    - _SparkleColor: {r: 1, g: 1, b: 1, a: 1}
+    - _SssColor: {r: 0.899371, g: 0.15555145, b: 0.15555145, a: 1}
+  m_BuildTextureStacks: []
