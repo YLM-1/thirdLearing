@@ -23,6 +23,10 @@ Material:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _FoamTexture:
+        m_Texture: {fileID: 2800000, guid: cb1e54c7a745bc34e8844f86ceab586c, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _MainTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -44,20 +48,22 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _WaveNormalMap:
-        m_Texture: {fileID: 2800000, guid: 44c024f168b8434429aa4ae6ef769118, type: 3}
+        m_Texture: {fileID: 2800000, guid: 4789b1e439e3b294e972b2f82ff1878d, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
     - _Amplitude: 96
-    - _Amplitude0: 0
-    - _Amplitude1: 2
-    - _DepthDensity: 0.004
-    - _EdgeFoamDepth: 0.04
-    - _FresnelIntensity: 0.15
+    - _Amplitude0: 5.6
+    - _Amplitude1: 4.5
+    - _DepthDensity: 0.002
+    - _EdgeFoamDepth: 0.03
+    - _FoamNoiseScale: 1
+    - _FoamScale: 0.3
+    - _FresnelIntensity: 0.2
     - _FresnelPower: 5
     - _ReflectionDistortion: 0.02
-    - _RefractStrength: 0.043
+    - _RefractStrength: 1
     - _SparkleAmplitude: 6.18
     - _SparkleIntensity: 3
     - _SparklePower: 8
@@ -67,20 +73,21 @@ Material:
     - _SpecularPower: 4.1
     - _SssIntensity: 1
     - _SssPower: 10
-    - _Wave0Direction: 0.064
-    - _Wave0Length: 18.9
-    - _Wave0Speed: 2.7
-    - _Wave1Direction: 0.155
-    - _Wave1Length: 27.8
-    - _Wave1Speed: 3.4
+    - _Wave0Direction: 0.25
+    - _Wave0Length: 30
+    - _Wave0Speed: 2.48
+    - _Wave1Direction: 0.75
+    - _Wave1Length: 30
+    - _Wave1Speed: 2.3
     - _WaveLength: 3.5
-    - _WaveNormalScale: 6.6
-    - _WaveNormalSpeed: 0.0136
+    - _WaveNormalScale: 20
+    - _WaveNormalSpeed: 0.0178
+    - _WaveNormalStrength: 0
     - _WaveSpeed: 4
     m_Colors:
-    - _DepthColor: {r: 0, g: 0.11301806, b: 0.34591186, a: 1}
+    - _DepthColor: {r: 0, g: 0.23666202, b: 0.44705883, a: 1}
     - _EdgeFoamColor: {r: 1, g: 1, b: 1, a: 1}
-    - _ShallowColor: {r: 0, g: 0.735849, b: 0.35567072, a: 1}
+    - _ShallowColor: {r: 0, g: 0.79755735, b: 1, a: 1}
     - _SparkleColor: {r: 1, g: 1, b: 1, a: 1}
-    - _SssColor: {r: 0.899371, g: 0.15555145, b: 0.15555145, a: 1}
+    - _SssColor: {r: 1, g: 0.022012413, b: 0.022012413, a: 1}
   m_BuildTextureStacks: []

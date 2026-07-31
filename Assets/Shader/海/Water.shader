@@ -7,6 +7,14 @@ Shader "Unlit/Water"
         _DepthColor ("Depth Color", Color) = (0.0,0.05,0.19,1)
         _DepthDensity ("Depth Density", Range(0,0.1)) = 0.01
 
+        [Header(Refraction)]
+        _RefractStrength ("Refract Strength", Range(0,1)) = 0.5
+
+        [Header(Reflection)]
+        _ReflectionTex("Reflection Texture", 2D) = "black"{}
+        _ReflectionStrength("Reflection Strength", Range(0,1)) = 1
+        _ReflectionDistortion("Reflection Distortion", Range(0,0.1)) = 0.02
+
         [Header(Wave)]
         _WaveNormalMap("Wave Normal Map", 2D)="bump"{}
         _FresnelPower("Fresnel Power", Range(0,20)) = 5
@@ -26,7 +34,7 @@ Shader "Unlit/Water"
         _WaveNormalScale("Wave Normal Scale", Range(0,100)) = 1
 
         _Amplitude0("Amplitude0", Range(0,100)) =1
-        _Wave0Length("Wave0 Length", Range(10,30)) = 1
+        _Wave0Length("Wave0 Length", Range(0,100)) = 1
         _Wave0Speed("Wave0 Speed", Range(0,10)) = 1
         _Wave0Direction("Wave0 Direction", Range(0,0.5))=0.25
 
@@ -65,6 +73,7 @@ Shader "Unlit/Water"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            #define PI 3.1415926535897932384626433832795
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -96,6 +105,9 @@ Shader "Unlit/Water"
             float _DepthDensity;
 
             float _RefractStrength;
+
+            float _ReflectionStrength;
+            float _ReflectionDistortion;
 
             float _FresnelPower;
             float _FresnelIntensity;
@@ -136,34 +148,14 @@ Shader "Unlit/Water"
             TEXTURE2D(_WaveNormalMap);
             SAMPLER(sampler_WaveNormalMap);
 
+            TEXTURE2D(_ReflectionTex);
+            SAMPLER(sampler_ReflectionTex);
+
             TEXTURE2D(_SparkleMap);
             SAMPLER(sampler_SparkleMap);
 
             TEXTURE2D(_FoamTexture);
             SAMPLER(sampler_FoamTexture);
-
-            float WaveMotion(float3 worldPos,float2 direction,float amplitude,float WaveLength,float WaveSpeed)
-            {
-                //y=a*sin(k*x+b)
-                float a=amplitude;
-                float k=2*PI/WaveLength;
-                float b=_Time.y*WaveSpeed;
-                float value=k*dot(worldPos.xz,direction)+b;
-                worldPos.y=a*sin(value);
-                return worldPos.y;
-            }
-
-            float WaveHeigh(float3 worldPos)
-            {
-                float2 direction0=float2(sin(_Wave0Direction),cos(_Wave0Direction));
-                float h0=WaveMotion(worldPos,direction0,_Amplitude0,_Wave0Length,_Wave0Speed);
-
-                float2 direction1=float2(sin(_Wave1Direction),cos(_Wave1Direction));
-                float h1=WaveMotion(worldPos,direction1,_Amplitude1,_Wave1Length,_Wave1Speed);
-
-                return h0+h1;
-            }
-
 
             float3 BaseColor(v2f i,float3 refractColor,float2 screenUV,out float waterDepth)
             {
@@ -184,9 +176,48 @@ Shader "Unlit/Water"
                 return baseColor;
             }
 
+            float3 RefractColor(v2f i,out float2 screenUV,float3 normalTS)
+            {
+                screenUV=i.screenPos.xy/i.screenPos.w;
+                float3 refract=SampleSceneColor(screenUV);//SampleSceneColor:用于采样摄像机渲染不透明的场景
+                float3 refractColor=refract*_ShallowColor.rgb;
+                return refractColor;
+            }
+
+            float3 PlanarReflectionColor(float2 screenUV,float3 normalTS)
+            {
+                float2 reflectionUV=screenUV+normalTS.xy*_ReflectionDistortion;
+                reflectionUV=saturate(reflectionUV);
+                return SAMPLE_TEXTURE2D(_ReflectionTex,sampler_ReflectionTex,reflectionUV).rgb;
+            }
+
+            float WaveMotion(float3 worldPos,float2 direction,float amplitude,float waveLength,float waveSpeed)
+            {
+                //y=a*sin(k*x+b)
+                float a=amplitude;
+                float k=2*PI/waveLength;
+                float b=_Time.y*waveSpeed;
+                float value=k*dot(worldPos.xz,direction)-b;
+                worldPos.y=a*sin(value);
+
+                return worldPos.y;
+            }
+
+            float WaveHeigh(float3 worldPos)
+            {
+                float2 direction0=float2(sin(_Wave0Direction),cos(_Wave0Direction));
+                float h0=WaveMotion(worldPos,direction0,_Amplitude0,_Wave0Length,_Wave0Speed);
+
+                float2 direction1=float2(sin(_Wave1Direction),cos(_Wave1Direction));
+                float h1=WaveMotion(worldPos,direction1,_Amplitude1,_Wave1Length,_Wave1Speed);
+
+                return h0+h1;
+            }
+
+
             float2 Panner(float2 direction,float2 uv)
             { 
-                return uv+direction*_Time.y*_WaveNormalSpeed;
+                return uv+normalize(direction)*_Time.y*_WaveNormalSpeed;
             }   
 
             float3 MotionWay(Texture2D tex,SamplerState samp,float2 uv,float4 scale,float type)
@@ -227,35 +258,31 @@ Shader "Unlit/Water"
                 float3 binormal=normalize(float3(0,hz-h,d));
                 float3 normal=normalize(cross(binormal,tangent));
                 return float3x3(tangent,binormal,normal);
+
+                // float3 tangent=float3(1,0,0);
+                // float3 binormal=float3(0,0,1);
+                // float3 normal=normalize(cross(binormal,tangent));
+                return float3x3(tangent,binormal,normal);
             }
 
-            float3 ReflectColor(v2f i,out float3 normalTS,out float3 reflectView,out float3 viewDirWS)
+            float3 ReflectColor(v2f i,out float3 normalTS,out float3 reflectView,out float3 viewDirWS,out float fresnelMask)
             {
-                //float3 normalTS=UnpackNormal(SAMPLE_TEXTURE2D(_WaveNormalMap,sampler_WaveNormalMap,i.uv));
+                //normalTS=UnpackNormal(SAMPLE_TEXTURE2D(_WaveNormalMap,sampler_WaveNormalMap,i.uv));
                 normalTS=MotionWay(_WaveNormalMap,sampler_WaveNormalMap,i.uv*_WaveNormalScale,float4(1,1,1,1),0);//用uv来采集
-                //float3 normalTS=MotionWay(i.posWS.xz/_WaveNormalScale);//用顶点位置来采集
-                float3x3 tbn=float3x3(i.tangent,i.binormal,i.normal);
-                //float3x3 tbn=TBN(i.posWS);
-                float3 normalWS=normalize(mul(normalTS,tbn));
-                // return normalWS;
+                //float3x3 tbn=float3x3(i.tangent,i.binormal,i.normal);
+                float3x3 tbn=TBN(i.posWS);
+                float3 normalWS=normalize(mul(tbn,normalTS));
+
                 //fresnel效果：
                 viewDirWS=normalize(_WorldSpaceCameraPos-i.posWS);
-                float fresnel=pow(1-saturate(dot(normalWS,viewDirWS)),_FresnelPower)*_FresnelIntensity;
+                fresnelMask=pow(1-saturate(dot(normalWS,viewDirWS)),_FresnelPower)*_FresnelIntensity;
 
                 //环境反射
                 reflectView=reflect(-viewDirWS,normalWS);
                 float4 Environment=SAMPLE_TEXTURECUBE(unity_SpecCube0,samplerunity_SpecCube0,reflectView);
                 float3 skyColor=DecodeHDREnvironment(Environment,unity_SpecCube0_HDR);
 
-                float3 reflectColor=skyColor*fresnel;
-                return reflectColor;
-            }
-
-            float3 RefractColor(v2f i,out float2 screenUV)
-            {
-                screenUV=i.screenPos.xy/i.screenPos.w;
-                float3 refractColor=SampleSceneColor(screenUV)*_ShallowColor.rgb;//SampleSceneColor:用于采样摄像机渲染不透明的场景
-                return refractColor;
+                return skyColor;
             }
 
             float3 EdgeFoamColor(float waterDepth)
@@ -303,18 +330,40 @@ Shader "Unlit/Water"
             {
                 v2f o;
                 o.uv =v.uv;
-                //顶点偏移
                 float3 worldPos=TransformObjectToWorld(v.vertex.xyz);
                 worldPos.y+=WaveHeigh(worldPos);
-                o.posWS=worldPos;
-                o.vertex = TransformObjectToHClip(worldPos);
 
+                // // 计算 Wave0 的参数与斜率 (dy/dx0)
+                // float2 dir0 = float2(sin(_Wave0Direction), cos(_Wave0Direction));
+                // float k0 = 2.0 * PI / _Wave0Length;
+                // float value0 = k0 * dot(worldPos.x, dir0) + _Time.y * _Wave0Speed;
+                // float h0 = _Amplitude0 * sin(value0);
+                // // 正弦波对位置求导：dy/d(pos) = a * k * cos(value) * dir
+                // float slope0 = _Amplitude0 * k0 * cos(value0);
+
+                // // 3. 计算 Wave1 的参数与斜率 (dy/dx1)
+                // float2 dir1 = float2(sin(_Wave1Direction), cos(_Wave1Direction));
+                // float k1 = 2.0 * PI / _Wave1Length;
+                // float value1 = k1 * dot(worldPos.x, dir1) + _Time.y * _Wave1Speed;
+                // float h1 = _Amplitude1 * sin(value1);
+                // float slope1 = _Amplitude1 * k1 * cos(value1);
+
+                // //顶点位置叠加波浪高度
+                // worldPos.y+=h0+h1;
+                worldPos.y+=WaveHeigh(worldPos);
+
+                o.posWS=worldPos;
+                o.vertex = TransformWorldToHClip(worldPos);
                 o.screenPos = ComputeScreenPos(o.vertex);
 
-                //构建TBN矩阵
-                o.tangent=normalize(TransformObjectToWorldDir(v.tangent.xyz));
-                o.normal=normalize(TransformObjectToWorldNormal(v.normal));
-                o.binormal=normalize(cross(o.normal,o.tangent)*v.tangent.w);
+                //叠加两层波浪在 X 和 Z 方向的切线斜率
+                // float dhdx = slope0 * dir0.x + slope1 * dir1.x; // Y 随 X 的变化率
+                // float dhdz = slope0 * dir0.y + slope1 * dir1.y; // Y 随 Z 的变化率
+
+                // //构建TBN矩阵
+                // o.binormal=normalize(float3(0,dhdz,1));
+                // o.tangent=normalize(float3(1,dhdx,0));
+                // o.normal=normalize(cross(o.binormal,o.tangent));
 
                 return o;
             }
@@ -326,14 +375,14 @@ Shader "Unlit/Water"
                 float3 reflectView;
                 float3 viewDirWS;
                 float3 normalTS;
+                float fresnelMask;
 
                 Light light=GetMainLight();
                 float3 lightDir=normalize(light.direction);
 
-                float3 refractColor=RefractColor(i,screenUV);
+                float3 reflectColor=ReflectColor(i,normalTS,reflectView,viewDirWS,fresnelMask);
+                float3 refractColor=RefractColor(i,screenUV,normalTS);
                 float3 baseColor=BaseColor(i,refractColor,screenUV,waterDepth);
-
-                float3 reflectColor=ReflectColor(i,normalTS,reflectView,viewDirWS);
 
                 float3 edgeColor=EdgeFoamColor(waterDepth);
 
@@ -345,13 +394,11 @@ Shader "Unlit/Water"
 
                 float3 foamColor=FoamColor(i,_FoamTexture,sampler_FoamTexture,normalTS);
 
-                float3 finalColor=baseColor+reflectColor+edgeColor+sparkleColor+specularColor+foamColor;
-                //finalColor=edgeColor;
-                //finalColor=sparkleColor;
-                //finalColor=specularColor;
-                //finalColor=reflectColor;
-                //finalColor=sssColor;
-                //finalColor=foamColor;
+                float3 planarReflectionColor=PlanarReflectionColor(screenUV,normalTS);
+                reflectColor=lerp(reflectColor,planarReflectionColor,_ReflectionStrength);
+
+                float3 finalColor=lerp(baseColor,reflectColor,saturate(fresnelMask));
+                finalColor+=edgeColor+sparkleColor+specularColor+sssColor+foamColor;
                 return float4(finalColor,1);
             }
             ENDHLSL
