@@ -29,10 +29,13 @@ Material:
     - _Curve: 2
     - _Forward: 0.245
     - _ForwardRandom: 0.181
-    - _Height: 0.394
+    - _Height: 0.5
     - _HeightRandom: 0.337
-    - _RotationRandom: 0.717
+    - _RotationRandom: 0.819
+    - _Translucent: 1.26
     - _Width: 0.0505
     - _WidthRandom: 0.0622
-    m_Colors: []
+    m_Colors:
+    - _BottomColor: {r: 0.40251565, g: 0.32080206, b: 0, a: 1}
+    - _TopColor: {r: 0, g: 1, b: 0.18620682, a: 1}
   m_BuildTextureStacks: []

@@ -15,6 +15,14 @@ Shader "Unlit/Grass"
 
         _RotationRandom("Rotation Random",Range(0,1))=0.2
         _BlendingRandom("Blending Random",Range(0,1))=0.2
+
+        [Header(Shading)]
+        _TopColor("Top Color",Color)=(1,1,1,1)
+        _BottomColor("Bottom Color",Color)=(1,1,1,1)
+        _Translucent("Translucent",Range(0,2))=0.5
+
+        _SpecularPower("Specular Power",Range(0,20))=5
+        _SpecularIntensity("Specular Intensity",Range(0,10))=1
     }
     SubShader
     {
@@ -34,6 +42,7 @@ Shader "Unlit/Grass"
             #define PI 3.14159265
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             struct appdata
             {
@@ -54,6 +63,9 @@ Shader "Unlit/Grass"
             struct g2f
             {
                 float4 pos:SV_POSITION;
+                float3 worldNormal : NORMAL;
+                float2 uv : TEXCOORD0;
+                float3 posWS : TEXCOORD1;
             };
 
             CBUFFER_START(UnityPerMaterial)
@@ -66,6 +78,12 @@ Shader "Unlit/Grass"
             float _WidthRandom;
             float _RotationRandom;
             float _BlendingRandom;
+
+            float4 _TopColor;
+            float4 _BottomColor;
+            float _Translucent;
+            float _SpecularPower;
+            float _SpecularIntensity;
             CBUFFER_END
 
             v2g vert (appdata v)
@@ -103,11 +121,14 @@ Shader "Unlit/Grass"
                 return frac(sin(dot(pos,float3(12.9898,78.233,45.1643)))*43758.5453);
             }
 
-            g2f VertexOutPut(float3 origPos,float3 pos,float3x3 mat)
+            g2f VertexOutPut(float3 origPos,float3 pos,float3 normal,float2 uv,float3x3 mat)
             {
                 g2f o;
-                float3 p=mul(mat,pos);
+                float3 p=mul(mat,pos);//模型空间转切线空间
                 o.pos = TransformObjectToHClip(origPos+p);
+                o.worldNormal = mul(mat,normal);
+                o.posWS = TransformObjectToWorld(o.pos);
+                o.uv = uv;
                 return o;
             }
             
@@ -123,13 +144,11 @@ Shader "Unlit/Grass"
                 float3 normal = IN[0].normal;
                 float4 tangent = IN[0].tangent;
                 float3 binormal = cross(normal, tangent.xyz)*tangent.w;
-                float3x3 TBN = float3x3(tangent.x, binormal.x, normal.x,
-                                        tangent.y, binormal.y, normal.y,
-                                        tangent.z, binormal.z, normal.z);
+                float3x3 TBN = transpose(float3x3(tangent.xyz, binormal, normal));
 
                 //随机方向
-                float3x3 fracingRotationMat = _angleAxis3x3(RandomValue(pos)*2*PI*_RotationRandom,float3(0,0,1));
-                float3x3 facingMat = mul(TBN,fracingRotationMat);
+                float3x3 fracingRotationMat = _angleAxis3x3(RandomValue(pos)*2*PI*_RotationRandom,float3(0,0,1));//在切线空间旋转，此时它的法线方向是z轴
+                float3x3 facingMat = mul(TBN,fracingRotationMat);//切线空间转模型空间
 
                 //随机弯曲
                 float3x3 bendingRotationMat = _angleAxis3x3(RandomValue(pos.zxy)*0.5*PI*_BlendingRandom,float3(1,0,0));
@@ -147,16 +166,32 @@ Shader "Unlit/Grass"
                     float h=height*t;
                     float w=i==0?width/1.5:width*(1-t);
                     float f=pow(t,_Curve)*forward;
+
                     float3x3 currentMat = (i == 0) ? facingMat : mat;
-                    triStream.Append(VertexOutPut(pos,float3(w,f,h),currentMat));
-                    triStream.Append(VertexOutPut(pos,float3(-w,f,h),currentMat));
+                    triStream.Append(VertexOutPut(pos,float3(w,f,h), float3(0,-1,f),float2(0,t),currentMat));
+                    triStream.Append(VertexOutPut(pos,float3(-w,f,h), float3(0,-1,f),float2(1,t),currentMat));
                 }
-                triStream.Append(VertexOutPut(pos,float3(0,forward,height),mat));
+                triStream.Append(VertexOutPut(pos,float3(0,forward,height),float3(0,-1,forward),float2(0.5,1),mat));
             }
 
             float4 frag (g2f i) : SV_Target
             {
-                return 1;
+                Light light  = GetMainLight();
+                float3 lightColor = light.color;
+                float3 lightDir = normalize(light.direction);
+
+                //lambert
+                float NdotL = saturate(dot(i.worldNormal,lightDir)+_Translucent);
+                float4 col=lerp(_BottomColor,_TopColor,i.uv.y);
+
+                //specular
+                float3 viewDir = normalize(i.posWS.xyz-_WorldSpaceCameraPos);
+                float3 halfDir = normalize(lightDir+viewDir);
+                float NdotH = saturate(dot(i.worldNormal,halfDir));
+                float specular = pow(NdotH,_SpecularPower)*_SpecularIntensity;
+                lightColor+=specular;
+                float4 finalColor = col*float4(lightColor,1)*NdotL;
+                return finalColor;
             }
             ENDHLSL
         }
