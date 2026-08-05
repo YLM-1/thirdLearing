@@ -36,14 +36,15 @@ Material:
     - _Height: 0.5
     - _HeightRandom: 0.337
     - _RotationRandom: 0.819
-    - _ShadowStrength: 0.564
+    - _ShadowStrength: 0.602
     - _SpecularIntensity: 1.53
     - _SpecularPower: 1.9
     - _Translucent: 1.4
     - _Varation: 0.0081
-    - _Width: 0.0505
+    - _Width: 0.023
     - _WidthRandom: 0.0622
-    - _WindSpeed: 0.049
+    - _WindSpeed: 0.079
+    - _WindStrength: 0.674
     m_Colors:
     - _BottomColor: {r: 0.37106913, g: 0.26357818, b: 0, a: 1}
     - _ColorVaration: {r: 0.56001884, g: 0.57232696, b: 0, a: 1}

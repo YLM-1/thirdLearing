@@ -32,6 +32,9 @@ Shader "Unlit/Grass"
         _WindTexture("Wind Texture",2D) = "white" {}
         _WindSpeed("Wind Speed",Range(0,1))=0.1
         _WindStrength("Wind Strength",Range(0,1))=1
+
+        [Header(Interaction)]
+        _Radius("Radius",Float)=1
     }
 
     HLSLINCLUDE
@@ -92,6 +95,8 @@ Shader "Unlit/Grass"
 
     float _WindSpeed;
     float _WindStrength;
+
+    float _Radius;
     CBUFFER_END
 
     TEXTURE2D(_WindTexture);
@@ -99,6 +104,7 @@ Shader "Unlit/Grass"
 
     float3 _LightDirection;
     float3 _LightPosition;
+    float4 _Position;
 
     v2g vert (appdata v)
     {
@@ -207,12 +213,18 @@ Shader "Unlit/Grass"
         float3x3 windRotationMat = _angleAxis3x3(windSample.x*PI,wind);
         mat = mul(mat,windRotationMat);
 
-
         //增加草模型的细分
         //计算高度和宽度
         float height = _Height + RandomValue(pos.yzx)*_HeightRandom;
         float width  = _Width  + RandomValue(pos.zxy)*_WidthRandom;
         float forward = _Forward + RandomValue(pos.xzy)*_ForwardRandom;
+
+        //交互
+        float3 worldPos = TransformObjectToWorld(pos).xyz;
+        float dis = distance(_Position.xyz,worldPos);
+        float radius = 1-saturate(dis/_Radius);
+        height = height-radius;
+        forward = forward-radius*2;
 
         for(int i=0;i<_GRASS_SEGMENTS;++i)
         {
