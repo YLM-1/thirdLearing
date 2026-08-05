@@ -25,6 +25,8 @@ Shader "Unlit/Grass"
 
         _SpecularPower("Specular Power",Range(0,20))=5
         _SpecularIntensity("Specular Intensity",Range(0,10))=1
+
+        _ShadowStrength("Shadow Strength",Range(0,1))=0.5
     }
 
     HLSLINCLUDE
@@ -60,6 +62,7 @@ Shader "Unlit/Grass"
         float2 uv : TEXCOORD0;
         float3 posWS : TEXCOORD1;
         float varation : TEXCOORD2;
+        float4 shadowCoord: TEXCOORD3;
     };
 
     CBUFFER_START(UnityPerMaterial)
@@ -80,7 +83,11 @@ Shader "Unlit/Grass"
     float _Translucent;
     float _SpecularPower;
     float _SpecularIntensity;
+    float _ShadowStrength;
     CBUFFER_END
+
+    float3 _LightDirection;
+    float3 _LightPosition;
 
     v2g vert (appdata v)
     {
@@ -121,11 +128,42 @@ Shader "Unlit/Grass"
     {
         g2f o;
         float3 p=mul(mat,pos);//模型空间转切线空间
-        o.pos = TransformObjectToHClip(origPos+p);
-        o.worldNormal = mul(mat,normal);
-        o.posWS = TransformObjectToWorld(o.pos);
+        float3 objectPos = origPos + p;
+        o.pos = TransformObjectToHClip(objectPos);
+        o.worldNormal = TransformObjectToWorldNormal(mul(mat,normal));
+        o.posWS = TransformObjectToWorld(objectPos);
         o.uv = uv;
         o.varation = RandomValue(origPos);
+
+        //计算阴影坐标
+        o.shadowCoord = TransformWorldToShadowCoord(o.posWS);
+        return o;
+    }
+
+    g2f ShadowVertexOutPut(float3 origPos,float3 pos,float3 normal,float2 uv,float3x3 mat)
+    {
+        g2f o;
+        float3 objectPos = origPos + mul(mat,pos);
+        float3 positionWS = TransformObjectToWorld(objectPos);
+        float3 normalWS = TransformObjectToWorldNormal(mul(mat,normal));
+
+        #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
+            float3 lightDirectionWS = normalize(_LightPosition - positionWS);
+        #else
+            float3 lightDirectionWS = _LightDirection;
+        #endif
+
+        o.pos = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
+        #if UNITY_REVERSED_Z
+            o.pos.z = min(o.pos.z, UNITY_NEAR_CLIP_VALUE);
+        #else
+            o.pos.z = max(o.pos.z, UNITY_NEAR_CLIP_VALUE);
+        #endif
+        o.worldNormal = normalWS;
+        o.posWS = positionWS;
+        o.uv = uv;
+        o.varation = RandomValue(origPos);
+        o.shadowCoord = 0;
         return o;
     }
     
@@ -170,6 +208,38 @@ Shader "Unlit/Grass"
         }
         triStream.Append(VertexOutPut(pos,float3(0,forward,height),float3(0,-1,forward),float2(0.5,1),mat));
     }
+
+    [maxvertexcount(_GRASS_SEGMENTS*2+1)]
+    void shadowGeo(triangle v2g IN[3], inout TriangleStream<g2f> triStream)
+    {
+        float3 pos = IN[0].vertex;
+        float3 normal = IN[0].normal;
+        float4 tangent = IN[0].tangent;
+        float3 binormal = cross(normal, tangent.xyz) * tangent.w;
+        float3x3 TBN = transpose(float3x3(tangent.xyz, binormal, normal));
+
+        float3x3 facingRotationMat = _angleAxis3x3(RandomValue(pos) * 2 * PI * _RotationRandom, float3(0, 0, 1));
+        float3x3 facingMat = mul(TBN, facingRotationMat);
+        float3x3 bendingRotationMat = _angleAxis3x3(RandomValue(pos.zxy) * 0.5 * PI * _BlendingRandom, float3(1, 0, 0));
+        float3x3 mat = mul(facingMat, bendingRotationMat);
+
+        float height = _Height + RandomValue(pos.yzx) * _HeightRandom;
+        float width = _Width + RandomValue(pos.zxy) * _WidthRandom;
+        float forward = _Forward + RandomValue(pos.xzy) * _ForwardRandom;
+
+        for (int i = 0; i < _GRASS_SEGMENTS; ++i)
+        {
+            float t = i / (float)_GRASS_SEGMENTS;
+            float h = height * t;
+            float w = i == 0 ? width / 1.5 : width * (1 - t);
+            float f = pow(t, _Curve) * forward;
+            float3x3 currentMat = i == 0 ? facingMat : mat;
+
+            triStream.Append(ShadowVertexOutPut(pos, float3(w, f, h), float3(0, -1, f), float2(0, t), currentMat));
+            triStream.Append(ShadowVertexOutPut(pos, float3(-w, f, h), float3(0, -1, f), float2(1, t), currentMat));
+        }
+        triStream.Append(ShadowVertexOutPut(pos, float3(0, forward, height), float3(0, -1, forward), float2(0.5, 1), mat));
+    }
     ENDHLSL
     SubShader
     {
@@ -183,12 +253,17 @@ Shader "Unlit/Grass"
             #pragma vertex vert
             #pragma geometry geo
             #pragma fragment frag
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile _ _SHADOWS_SOFT
 
             float4 frag (g2f i) : SV_Target
             {
-                Light light  = GetMainLight();
+                //获取光照和阴影
+                Light light = GetMainLight(i.shadowCoord);
                 float3 lightColor = light.color;
                 float3 lightDir = normalize(light.direction);
+                float shadowAttenuation = light.shadowAttenuation;
+                shadowAttenuation = lerp(1,shadowAttenuation,_ShadowStrength);
 
                 //lambert
                 float NdotL = saturate(dot(i.worldNormal,lightDir)+_Translucent);
@@ -200,7 +275,7 @@ Shader "Unlit/Grass"
                 float NdotH = saturate(dot(i.worldNormal,halfDir));
                 float specular = pow(NdotH,_SpecularPower)*_SpecularIntensity;
 
-                lightColor = NdotL*lightColor+specular;
+                lightColor = (NdotL*lightColor+specular)*shadowAttenuation;
 
                 col = col*float4(lightColor,1);
                 //杂色
@@ -211,21 +286,19 @@ Shader "Unlit/Grass"
             ENDHLSL
         }
 
-        Name "ShadowCaster"
-        Tags { "LightMode"="ShadowCaster" }
-        Cull Off
-
         Pass
         {
-            HLSLPROGRAM
-            #pragma vertex vert
-            #pragma geometry Shadowgeo
-            #pragma fragment Shadowfrag
-
+            Name "ShadowCaster"
+            Tags { "LightMode"="ShadowCaster" }
             Cull Off
             ColorMask 0
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma geometry shadowGeo
+            #pragma fragment Shadowfrag
+            #pragma multi_compile _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
-            float4 Shadowfrag(Shadowg2f i):SV_Target
+            float4 Shadowfrag(g2f i):SV_Target
             {
                 return 0;
             }

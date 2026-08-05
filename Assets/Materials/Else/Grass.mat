@@ -32,8 +32,9 @@ Material:
     - _Height: 0.5
     - _HeightRandom: 0.337
     - _RotationRandom: 0.819
+    - _ShadowStrength: 0.5
     - _SpecularIntensity: 1.53
-    - _SpecularPower: 12
+    - _SpecularPower: 1.9
     - _Translucent: 1.4
     - _Varation: 0.0081
     - _Width: 0.0505
