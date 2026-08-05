@@ -27,6 +27,11 @@ Shader "Unlit/Grass"
         _SpecularIntensity("Specular Intensity",Range(0,10))=1
 
         _ShadowStrength("Shadow Strength",Range(0,1))=0.5
+
+        [Header(Wind)]
+        _WindTexture("Wind Texture",2D) = "white" {}
+        _WindSpeed("Wind Speed",Range(0,1))=0.1
+        _WindStrength("Wind Strength",Range(0,1))=1
     }
 
     HLSLINCLUDE
@@ -84,7 +89,13 @@ Shader "Unlit/Grass"
     float _SpecularPower;
     float _SpecularIntensity;
     float _ShadowStrength;
+
+    float _WindSpeed;
+    float _WindStrength;
     CBUFFER_END
+
+    TEXTURE2D(_WindTexture);
+    SAMPLER(sampler_WindTexture);
 
     float3 _LightDirection;
     float3 _LightPosition;
@@ -188,6 +199,14 @@ Shader "Unlit/Grass"
         //随机弯曲
         float3x3 bendingRotationMat = _angleAxis3x3(RandomValue(pos.zxy)*0.5*PI*_BlendingRandom,float3(1,0,0));
         float3x3 mat = mul(facingMat,bendingRotationMat);
+
+        //添加动画
+        float2 windUV = pos.xz+_Time.x*_WindSpeed;
+        float2 windSample = SAMPLE_TEXTURE2D_LOD(_WindTexture,sampler_WindTexture,windUV,0).rg*_WindStrength;
+        float3 wind = normalize(float3(windSample.x,windSample.y,0));
+        float3x3 windRotationMat = _angleAxis3x3(windSample.x*PI,wind);
+        mat = mul(mat,windRotationMat);
+
 
         //增加草模型的细分
         //计算高度和宽度

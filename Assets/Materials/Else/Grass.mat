@@ -22,7 +22,11 @@ Material:
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
-    m_TexEnvs: []
+    m_TexEnvs:
+    - _WindTexture:
+        m_Texture: {fileID: 2800000, guid: 14a091a4055d01d4898180ef878a1020, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
     - _BlendingRandom: 0.602
@@ -32,15 +36,16 @@ Material:
     - _Height: 0.5
     - _HeightRandom: 0.337
     - _RotationRandom: 0.819
-    - _ShadowStrength: 0.5
+    - _ShadowStrength: 0.564
     - _SpecularIntensity: 1.53
     - _SpecularPower: 1.9
     - _Translucent: 1.4
     - _Varation: 0.0081
     - _Width: 0.0505
     - _WidthRandom: 0.0622
+    - _WindSpeed: 0.049
     m_Colors:
     - _BottomColor: {r: 0.37106913, g: 0.26357818, b: 0, a: 1}
     - _ColorVaration: {r: 0.56001884, g: 0.57232696, b: 0, a: 1}
-    - _TopColor: {r: 0, g: 0.46540874, b: 0.14651756, a: 1}
+    - _TopColor: {r: 0, g: 0.61006284, b: 0.19001964, a: 1}
   m_BuildTextureStacks: []
