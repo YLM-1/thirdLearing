@@ -26,16 +26,20 @@ Material:
     m_Ints: []
     m_Floats:
     - _BlendingRandom: 0.602
-    - _Curve: 2
-    - _Forward: 0.245
+    - _Curve: 2.08
+    - _Forward: 0.486
     - _ForwardRandom: 0.181
     - _Height: 0.5
     - _HeightRandom: 0.337
     - _RotationRandom: 0.819
-    - _Translucent: 1.26
+    - _SpecularIntensity: 1.53
+    - _SpecularPower: 12
+    - _Translucent: 1.4
+    - _Varation: 0.0081
     - _Width: 0.0505
     - _WidthRandom: 0.0622
     m_Colors:
-    - _BottomColor: {r: 0.40251565, g: 0.32080206, b: 0, a: 1}
-    - _TopColor: {r: 0, g: 1, b: 0.18620682, a: 1}
+    - _BottomColor: {r: 0.37106913, g: 0.26357818, b: 0, a: 1}
+    - _ColorVaration: {r: 0.56001884, g: 0.57232696, b: 0, a: 1}
+    - _TopColor: {r: 0, g: 0.46540874, b: 0.14651756, a: 1}
   m_BuildTextureStacks: []
