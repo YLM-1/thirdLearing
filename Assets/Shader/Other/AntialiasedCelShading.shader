@@ -67,7 +67,7 @@ Shader "Unlit/AntialiasedCelShading"
                 //half_lambert
                 float NdotL=dot(normalWS,lightDir)*0.5+0.5;
 
-                float _f=fwidth(NdotL)*0.5;//fwidth()当前这个像素，和它周围的像素相比，变化得有多剧烈
+                float _f=fwidth(NdotL)*0.5; //fwidth()当前这个像素，和它周围的像素相比，变化得有多剧烈
 
                 if(NdotL<_DiffuseSegment.x+_f)
                      NdotL=lerp(_DiffuseSegment.x,_DiffuseSegment.y,smoothstep(_DiffuseSegment.x-_f,_DiffuseSegment.x+_f,NdotL));

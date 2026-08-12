@@ -22,11 +22,11 @@ Shader "Unlit/Forward"
             #pragma vertex vert
             #pragma fragment frag
 
-            #pragma multi_compile _ _ADDITIONAL_LIGHTS
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS//开启额外光源
             
-
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
             struct appdata
             {
                 float4 vertex : POSITION;
@@ -43,12 +43,12 @@ Shader "Unlit/Forward"
             };
 
             CBUFFER_START(UnityPerMaterial)
-                float4 _MainTex_ST;
-                float4 _Diffuse;
-                float4 _SpecularColor;
-                float _Gloss;
-                float _SpecularPower;
-                float _SpecularIntensity;
+            float4 _MainTex_ST;
+            float4 _Diffuse;
+            float4 _SpecularColor;
+            float _Gloss;
+            float _SpecularPower;
+            float _SpecularIntensity;
             CBUFFER_END
 
             TEXTURE2D(_MainTex);
@@ -66,8 +66,8 @@ Shader "Unlit/Forward"
 
             float4 frag (v2f i) : SV_Target
             {
-                half3 normalWS = NormalizeNormalPerPixel(i.normalWS);
-                half3 viewDirectionWS = GetWorldSpaceNormalizeViewDir(i.posWS);
+                half3 normalWS = normalize(i.normalWS);
+                half3 viewDirectionWS = normalize(i.posWS);
                 half3 albedo = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).rgb * _Diffuse.rgb;
                 half4 specular = half4(saturate(_SpecularColor.rgb * _SpecularIntensity), 1);
 
@@ -79,10 +79,10 @@ Shader "Unlit/Forward"
                 color += LightingSpecular(attenuatedMainColor, mainLight.direction, normalWS, viewDirectionWS, specular, specularPower);
 
                 #if defined(_ADDITIONAL_LIGHTS)
-                uint pixelLightsCount = GetAdditionalLightsCount();
-                for (uint j = 0; j < pixelLightsCount; ++j)
+                int pixelLightsCount = GetAdditionalLightsCount();
+                for (int j = 0; j < pixelLightsCount; ++j)
                 {
-                    Light additionalLight = GetAdditionalLight(j, i.posWS, half4(1, 1, 1, 1));
+                    Light additionalLight = GetAdditionalLight(j, i.posWS);
                     half3 attenuatedLightColor = additionalLight.color * additionalLight.distanceAttenuation;
                     color += LightingLambert(attenuatedLightColor, additionalLight.direction, normalWS) * albedo;
                     color += LightingSpecular(attenuatedLightColor, additionalLight.direction, normalWS, viewDirectionWS, specular, specularPower);

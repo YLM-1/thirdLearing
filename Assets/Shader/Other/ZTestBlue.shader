@@ -7,12 +7,8 @@ Shader "Unlit/ZTestBlue"
     SubShader
     {
         Tags { "RenderType"="Transparent" "Queue"="Transparent+200"}
-        //ZWrite On
         ZWrite Off
-       // ZTest LEqual
-       //ZTest Greater
-       //ZTest Off 
-       Blend SrcAlpha OneMinusSrcAlpha
+        Blend SrcAlpha OneMinusSrcAlpha
 
         Pass
         {

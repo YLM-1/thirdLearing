@@ -8,7 +8,7 @@ public class CloudShadow : MonoBehaviour
     private Camera cam;
     void Start()
     {
-        OnWillRenderObject();
+        OnWillRenderObject();//物体被摄像机渲染前的那一刻，执行一些准备工作
     }
     private void OnWillRenderObject()//每帧渲染的时候运行
     {

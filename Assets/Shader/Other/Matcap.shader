@@ -66,6 +66,7 @@ Shader "Unlit/Matcap"
                 float3 reflectDir=reflect(-viewDir,normalWS);
                 float3 viewReflect = normalize(mul((float3x3)UNITY_MATRIX_V, reflectDir));
 
+                //球体侧面的弧度弯曲极大，导致球体边缘大片区域在正面视角下被挤压成薄薄的一缝。
                 float3 normal2=viewReflect+float3(0,0,1);
                 float m=sqrt(normal2.x*normal2.x+normal2.y*normal2.y+normal2.z*normal2.z);
                 float2 uv2=float2(normal2.x/m,normal2.y/m)*0.5+0.5;
@@ -73,7 +74,7 @@ Shader "Unlit/Matcap"
                 //CubeMap
                 float3 cubeMap=SAMPLE_TEXTURECUBE(_CubeMap,sampler_CubeMap,reflectDir);
 
-                //MatCap
+                //MatCap：在ViewSpace
                 float3 matCap=SAMPLE_TEXTURE2D(_MatCap,sampler_MatCap,uv2);
 
                 //BaseColor

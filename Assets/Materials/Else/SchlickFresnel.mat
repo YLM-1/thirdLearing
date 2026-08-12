@@ -33,15 +33,15 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _AngleMax: 176
+    - _AngleMax: 127
     - _AngleMin: 0
-    - _Bias: 0.45
-    - _Eta: 1.24
+    - _Bias: 0.2
+    - _Eta: 0.04
     - _Inverse: -1
-    - _RimIntensity: 1.1
-    - _RimPower: 1.25
+    - _RimIntensity: 2.3
+    - _RimPower: 6.07
     m_Colors:
     - _RimColor: {r: 0.015723169, g: 1, b: 0.5351366, a: 1}
-    - _RimColor1: {r: 0, g: 0.3948698, b: 1, a: 1}
+    - _RimColor1: {r: 0, g: 0.46881914, b: 1, a: 1}
     - _RimColor2: {r: 1, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []

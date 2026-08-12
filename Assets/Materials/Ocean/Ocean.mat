@@ -46,10 +46,10 @@ Material:
     m_Ints: []
     m_Floats:
     - _CombineFactoe: 1
-    - _CombineFactor: 0.55
+    - _CombineFactor: 0.574
     - _DepthFactor: 0.0023
-    - _Distortion: 0.015
-    - _FresnelInfluence: 1
+    - _Distortion: 0.0079
+    - _FresnelInfluence: 0.866
     - _RefractionDistortion: 0.015
     - _SparkleAmplitude: 1
     - _SparkleScale: 7.61

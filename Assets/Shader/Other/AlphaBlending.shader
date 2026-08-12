@@ -95,6 +95,7 @@ Shader "Unlit/AlphaBlending"
                 Light light = GetMainLight();
                 float3 lightDir = normalize(light.direction);
                 float3 worldNormal = normalize(i.normalWS);
+
                 float3 diffuse = max(round(frac(i.uv.x * 5)), round(frac(i.uv.y * 5))) * _Color.rgb;
                 float3 col = light.color * max(0, dot(worldNormal, lightDir)) * diffuse;
                 return float4(col, _AlphaScale);

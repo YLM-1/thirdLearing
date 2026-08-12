@@ -61,7 +61,7 @@ Shader "Unlit/CloudShadow"
                 o.vertex = TransformObjectToHClip(v.vertex);
                 o.uv = v.uv;
                 float3 worldPos = TransformObjectToWorld(v.vertex);
-                o.ray = worldPos - _WorldSpaceCameraPos;
+                o.ray = worldPos - _WorldSpaceCameraPos;//不能normalize:深度图只记录垂直距离。
                 o.normalWS = TransformObjectToWorldNormal(v.normal);
                 return o;
             }

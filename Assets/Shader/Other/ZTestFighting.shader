@@ -10,7 +10,8 @@ Shader "Unlit/ZTestFighting"
     {
         Tags { "RenderType"="Opaque" "Queue"="Transparent+200"}
         //离camera的距离越近，数值越小，越靠前
-        Offset [_OffsetFactor],[_OffsetUnits]
+        Offset [_OffsetFactor],[_OffsetUnits]//用于设置深度偏移，在不改变实际world坐标下
+                                             //强制修改Z-Buffer的深度值，主要用于解决闪烁问题
       
         Pass
         {

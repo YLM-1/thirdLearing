@@ -151,8 +151,10 @@ Shader "Unlit/StylizedHighlights"
                 float signX = 1;
                 if(tangentHalfDir.x < 0) 
                        signX = -1;
+                       
                 float signY = 1;
-                if(tangentHalfDir.y < 0) signY = -1;
+                if(tangentHalfDir.y < 0) 
+                       signY = -1;
                         tangentHalfDir -= float3(_SplitX * signX, _SplitY * signY, 0);
                 tangentHalfDir = normalize(tangentHalfDir);
 

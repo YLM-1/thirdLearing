@@ -7,8 +7,8 @@ Shader "Unlit/SchlickFresnel"
         _RimIntensity("Rim Intennsity",Range(0,5))=1
         _RimColor1("Rim Color1",Color)=(1,1,1,1)
         _RimColor2("Rim Color2",Color)=(1,1,1,1)
-        _Bias("Bias",Range(0,5))=0.6
-        _Eta("Eta",Range(0,5))=0.4
+        _Bias("Bias",Range(0,0.5))=0.2
+        _Eta("Eta",Range(0,0.2))=0.1
         _AngleMin("AngleMin",Range(0,360))=0
         _AngleMax("AngleMax",Range(0,360))=45
         _Inverse("Inverse",Range(-1,1))=1
@@ -93,8 +93,10 @@ Shader "Unlit/SchlickFresnel"
             
             float FuncschlickFresnel(float bias,float eta,float intensity,float NdotV)
             {
-                float a=Reamp(float2(0,1),float2(0,0.5),bias);
-                float f0=Reamp(float2(0,1),float2(0,0.2),eta);//反射系数
+                // float a=Reamp(float2(0,1),float2(0,0.5),bias);
+                // float f0=Reamp(float2(0,1),float2(0,0.2),eta);//反射系数
+                float a=bias;
+                float f0=eta;//反射系数
                 float fresnel=f0+(1-f0)*pow(1-NdotV,5);
                 float schlickFresnel=FuncBias(a,fresnel)*intensity;
                 return schlickFresnel;
@@ -147,8 +149,8 @@ Shader "Unlit/SchlickFresnel"
             float4 frag (v2f i) : SV_Target
             {
                 float NdotV=saturate(dot(i.worldNormal,i.viewDir));
-                // float3 fresnelColor=BasicRimRim(i.worldNormal,i.viewDir);     
-                // float3 fresnelColor=FuncschlickFresnel(_Bias,_Eta,_RimPower,NdotV);     
+                //float3 fresnelColor=BasicRimRim(i.worldNormal,i.viewDir);     
+                //float3 fresnelColor=FuncschlickFresnel(_Bias,_Eta,_RimPower,NdotV);     
                 // float3 fresnel=SchlicFresnelSegment(i.viewNormal,_Bias,_Eta,_RimPower,NdotV);
                 float3 fresnel=schlickFresnelSegmentColor(i.viewNormal,_Bias,_Eta,_RimPower,NdotV,_Inverse);
                 return float4(fresnel,1);

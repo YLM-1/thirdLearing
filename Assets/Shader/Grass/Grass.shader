@@ -39,7 +39,7 @@ Shader "Unlit/Grass"
 
     HLSLINCLUDE
     #pragma target 4.0
-
+    
     #define _GRASS_SEGMENTS 3 //定义草叶垂直方向的细分段数
     #define PI 3.14159265
 
@@ -144,7 +144,7 @@ Shader "Unlit/Grass"
     g2f VertexOutPut(float3 origPos,float3 pos,float3 normal,float2 uv,float3x3 mat)
     {
         g2f o;
-        float3 p=mul(mat,pos);//模型空间转切线空间
+        float3 p=mul(mat,pos);
         float3 objectPos = origPos + p;
         o.pos = TransformObjectToHClip(objectPos);
         o.worldNormal = TransformObjectToWorldNormal(mul(mat,normal));
@@ -200,7 +200,8 @@ Shader "Unlit/Grass"
 
         //随机方向
         float3x3 fracingRotationMat = _angleAxis3x3(RandomValue(pos)*2*PI*_RotationRandom,float3(0,0,1));//在切线空间旋转，此时它的法线方向是z轴
-        float3x3 facingMat = mul(TBN,fracingRotationMat);//切线空间转模型空间
+        float3x3 facingMat = mul(TBN,fracingRotationMat);//在切线空间旋转然后再转换到模型空间，所以是先乘以旋转矩阵再TBN
+                                                         //重新创建了这个变换矩阵(线性代数中矩阵的乘是从右往左来乘的)
 
         //随机弯曲
         float3x3 bendingRotationMat = _angleAxis3x3(RandomValue(pos.zxy)*0.5*PI*_BlendingRandom,float3(1,0,0));
@@ -301,7 +302,7 @@ Shader "Unlit/Grass"
                 float4 col=lerp(_BottomColor,_TopColor,i.uv.y);
 
                 //specular
-                float3 viewDir = normalize(i.posWS.xyz-_WorldSpaceCameraPos);
+                float3 viewDir = normalize(_WorldSpaceCameraPos-i.posWS.xyz);
                 float3 halfDir = normalize(lightDir+viewDir);
                 float NdotH = saturate(dot(i.worldNormal,halfDir));
                 float specular = pow(NdotH,_SpecularPower)*_SpecularIntensity;
