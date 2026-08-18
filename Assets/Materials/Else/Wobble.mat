@@ -25,17 +25,17 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _BottleRimIntensity: 8.8
-    - _BottleRimPower: 10.8
+    - _BottleRimIntensity: 16.3
+    - _BottleRimPower: 7.8
     - _BottleSpecularIntensity: 28.9
-    - _BottleSpecularPower: 69.9
-    - _BottleThickness: 0.0137
+    - _BottleSpecularPower: 44.7
     - _FillAmount: 0.559
     - _LiquidFoamHeight: 0.032
+    - _LiquidInset: 0.0144
     - _LiquidRimIntensity: 39.6
-    - _LiquidRimPower: 6.5
-    - _SpecularIntensity: 7.4
-    - _SpecularPower: 24.3
+    - _LiquidRimPower: 6.8
+    - _SpecularIntensity: 1.8
+    - _SpecularPower: 79
     - _WobbleX: -8.4
     - _WobbleZ: 9.1
     m_Colors:

@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: StencilBufferXrayObject30
-  m_Shader: {fileID: 4800000, guid: 7fee06bc333eba24bacdb03c93947f2e, type: 3}
+  m_Name: VertexExtruder
+  m_Shader: {fileID: 4800000, guid: 3888a1596c5edfc4482dc368d1a08b16, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -25,7 +25,8 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _StencilRef: 30
-    m_Colors:
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _ExtrusionFactor: 20
+    - _FadeIntensity: 2
+    - _FadePower: 2
+    m_Colors: []
   m_BuildTextureStacks: []

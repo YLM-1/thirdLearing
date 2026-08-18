@@ -17,6 +17,7 @@ Shader "Unlit/StencilBuffer"
                 Comp Equal//已经定义的Ref和Sencil Buffer中的值进行比较
                 Pass IncrSat//通过Ref+1
             }
+            
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag

@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: StencilBufferXrayObject10
-  m_Shader: {fileID: 4800000, guid: 7fee06bc333eba24bacdb03c93947f2e, type: 3}
+  m_Name: StencilBufferXrayObjectYellow
+  m_Shader: {fileID: 4800000, guid: 172b9f4834b8a554cbba682d49505b03, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -25,7 +25,7 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _StencilRef: 10
+    - _StencilRef: 99
     m_Colors:
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _Color: {r: 1, g: 0.887542, b: 0, a: 1}
   m_BuildTextureStacks: []
