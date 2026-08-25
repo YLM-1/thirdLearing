@@ -1,0 +1,19 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+// shader model 5.0: numthreads.x * numthreads.y * numthreads.z <= 1024, numthreads.z <= 64
+// shader model 4.5: numthreads.x * numthreads.y * numthreads.z <= 768, numthreads.z <= 1
+// shader model < 4.5, 不支持compute shader
+
+//每个线程组里面有多少个线程,由numthreads指定
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+
+    Result[id.xy] = float4(1,0,0,1);
+}

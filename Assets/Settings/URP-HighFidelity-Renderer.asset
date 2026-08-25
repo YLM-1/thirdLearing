@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f6f083e1e1666aa418dd6f2278c5719e, type: 3}
   m_Name: ColorBlitRendererFeature
   m_EditorClassIdentifier: 
-  m_Active: 1
+  m_Active: 0
   m_Shader: {fileID: 4800000, guid: e0081264375acab47810a20ca5605a32, type: 3}
   m_Intensity: 0.81
 --- !u!114 &-1878332245247344467
