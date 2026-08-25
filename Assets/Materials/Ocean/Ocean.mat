@@ -50,6 +50,13 @@ Material:
     - _DepthFactor: 0.0023
     - _Distortion: 0.0079
     - _FresnelInfluence: 0.866
+    - _GerstnerRandomDirection: 0.803
+    - _GerstnerSpeed: 0.5
+    - _GerstnerSteepnessMax: 0.509
+    - _GerstnerSteepnessMin: 0.05
+    - _GerstnerWaveCount: 16
+    - _GerstnerWavelengthMax: 2.38
+    - _GerstnerWavelengthMin: 0.85
     - _RefractionDistortion: 0.015
     - _SparkleAmplitude: 1
     - _SparkleScale: 7.61
@@ -63,6 +70,7 @@ Material:
     - _WaveSpeed: 0.01
     m_Colors:
     - _DepthColor: {r: 0, g: 0.5003076, b: 0.7484276, a: 1}
-    - _ShallowColor: {r: 0.0039215535, g: 0.8614018, b: 0.9882353, a: 0}
+    - _GerstnerDirection: {r: 1, g: 1, b: 0, a: 0}
+    - _ShallowColor: {r: 0.5943395, g: 0.9482823, b: 1, a: 0}
     - _SparkleColor: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

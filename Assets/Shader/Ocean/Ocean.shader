@@ -7,6 +7,16 @@ Shader "Myshader/Ocean"
       _WaveSpeed("WaveSpeed", Range(0,0.1))=0.05
       _WaveDirection("WaveDirection0", Range(0,1))=0.25
 
+      [Header(Gerstner Wave)]
+      _GerstnerWaveCount("Wave Count", Range(1,32))=16
+      _GerstnerRandomDirection("Random Direction", Range(0,1))=1
+      _GerstnerWavelengthMax("WaveLength Max", Range(0.1,5))=5
+      _GerstnerWavelengthMin("WaveLength Min", Range(0.1,5))=1
+      _GerstnerSteepnessMax("WaveSteepness Max", Range(0,1))=0.35
+      _GerstnerSteepnessMin("WaveSteepness Min", Range(0,1))=0.05
+      _GerstnerSpeed("Wave Speed", Range(0,3))=1
+      _GerstnerDirection("Direction", Vector)=(1,1,0,0)
+
       [Header(Specular)]
       _SpecularPower("SpecularPower", Range(0,10))=5
       _SpecularIntensity("SpecularIntensity", Range(0,1))=0.5

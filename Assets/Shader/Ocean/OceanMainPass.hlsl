@@ -2,6 +2,16 @@
 float _WaveSpeed;
 float _WaveDirection;
 
+// Gerstner parameters; existing wave variables remain for normal-map animation.
+float _GerstnerWaveCount;
+float _GerstnerRandomDirection;
+float _GerstnerWavelengthMax;
+float _GerstnerWavelengthMin;
+float _GerstnerSteepnessMax;
+float _GerstnerSteepnessMin;
+float _GerstnerSpeed;
+float4 _GerstnerDirection;
+
 //BaseColor
 float _DepthFactor;
 float4 _DepthColor;
@@ -48,17 +58,55 @@ struct v2f
     float3 worldPos:TEXCOORD5; 
 };
 
+struct GerstnerResult { float3 position; float3 tangent; float3 binormal; };
+
+float GerstnerRandom(uint seed)
+{
+    return frac(sin((float)seed*12.9898)*43758.5453)*2.0-1.0;
+}
+
+GerstnerResult GerstnerWave(float3 positionWS)
+{
+    GerstnerResult result;
+    float3 displacement=0;
+    float3 tangent=float3(1,0,0);
+    float3 binormal=float3(0,0,1);
+    float2 baseDirection=normalize(_GerstnerDirection.xy);
+    baseDirection=dot(_GerstnerDirection.xy,_GerstnerDirection.xy)>0.0001 ? baseDirection : float2(1,0);
+    int waveCount=(int)clamp(_GerstnerWaveCount,1,32);
+    for(int index=0;index<waveCount;index++)
+    {
+        float step=(float)index/(float)waveCount;
+        float2 randomDirection=normalize(float2(GerstnerRandom((uint)index),GerstnerRandom((uint)(index*2+1))));
+        float2 direction=normalize(lerp(baseDirection,randomDirection,_GerstnerRandomDirection));
+        float wavelength=max(0.01,lerp(_GerstnerWavelengthMax,_GerstnerWavelengthMin,step));
+        float steepness=lerp(_GerstnerSteepnessMax,_GerstnerSteepnessMin,step)/(float)waveCount;
+        float k=2.0*PI/wavelength;
+        float amplitude=steepness/k;
+        float phase=dot(direction*k,positionWS.xz)-sqrt(9.81*k)*_Time.y*_GerstnerSpeed;
+        float sine=sin(phase); float cosine=cos(phase);
+        displacement.xz+=direction*amplitude*cosine; displacement.y+=amplitude*sine;
+        tangent+=float3(-direction.x*direction.x*k*amplitude*sine,direction.x*k*amplitude*cosine,-direction.x*direction.y*k*amplitude*sine);
+        binormal+=float3(-direction.x*direction.y*k*amplitude*sine,direction.y*k*amplitude*cosine,-direction.y*direction.y*k*amplitude*sine);
+    }
+    result.position=positionWS+displacement; result.tangent=tangent; result.binormal=binormal;
+    return result;
+}
+
 v2f vert(appdata v)
 {
     v2f o;
     o.uv=v.uv;
-    o.vertex=TransformObjectToHClip(v.vertex.xyz);
-    o.worldPos=TransformObjectToWorld(v.vertex.xyz);
+    float3 worldPos=TransformObjectToWorld(v.vertex.xyz);
+    GerstnerResult gerstner=GerstnerWave(worldPos);
+    worldPos=gerstner.position;
+    o.vertex=TransformWorldToHClip(worldPos);
+    o.worldPos=worldPos;
     o.screenPos=ComputeScreenPos(o.vertex);
 
-    o.worldNormal=normalize(TransformObjectToWorldNormal(v.normal));
-    o.tangent=normalize(TransformObjectToWorldDir(v.tangent.xyz));
-    o.binormal=normalize(cross(o.worldNormal,o.tangent)*v.tangent.w);
+    o.tangent=normalize(gerstner.tangent);
+    o.binormal=normalize(gerstner.binormal);
+    o.worldNormal=normalize(cross(o.binormal,o.tangent));
     return o;
 }
 
