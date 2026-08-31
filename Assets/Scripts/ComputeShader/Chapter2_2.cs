@@ -88,4 +88,9 @@ public class Chapter2_2 : MonoBehaviour
         shader.SetFloat("time", Time.time);
         shader.Dispatch(circlesHandle,circleCount, 1, 1);
     }
+
+    private void OnDestroy()
+    {
+        cb.Dispose();
+    }
 }

@@ -1,0 +1,36 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+
+struct Vertex
+{
+    float3 position;
+    float3 normal;
+};
+
+//仅仅用于传递原始模型数据，并不修改
+StructuredBuffer<Vertex> srcVertexBuffer;
+
+//修改并返回新的顶点数据，所以申明为RW
+RWStructuredBuffer<Vertex> dstVertexBuffer;
+
+float radius;
+float range;
+
+[numthreads(1,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    //p = p0 + dir*t线段的参数式
+    float3 dir = normalize(srcVertexBuffer[id.x].position);
+
+    float3 dstPosition = dir * radius;
+    float3 pos = lerp(srcVertexBuffer[id.x].position,dstPosition,range);
+    
+    //计算法线
+    float3 nrm = lerp(srcVertexBuffer[id.x].normal,dir,range);
+
+    dstVertexBuffer[id.x].position=pos;
+    dstVertexBuffer[id.x].normal=nrm;
+}
