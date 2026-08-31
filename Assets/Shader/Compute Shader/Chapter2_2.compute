@@ -1,0 +1,97 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Circles
+#pragma kernel Clear
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+shared RWTexture2D<float4> Result;
+
+struct Circle
+{
+    float2 origPos;
+    float2 velocity;
+    float radius;
+};
+
+StructuredBuffer<Circle> circles;
+
+float time;
+int texResolution;
+
+// range: 0-1
+float random(float value, float seed = 0.546)
+{
+	float random = (frac(sin(value + seed) * 143758.5453));// + 1.0)/2.0;
+	return random;
+}
+
+float2 random2(float value)
+{
+	return float2(
+		random(value, 3.9812),
+		random(value, 7.1536)
+	);
+}
+
+void circlePlot8(int x, int y, int2 centre)
+{
+    Result[uint2(centre.x + x, centre.y + y)] = float4(1, 0, 0, 1);
+}
+
+void drawCircle(int2 centre, int radius)
+{
+    int x = 0;
+    int y = radius;
+    int d = 1 - radius;
+
+    while (x < y)
+    {
+        if (d < 0)
+            d += 2 * x + 3;
+        else
+        {
+            d += 2 * (x - y) + 5; 
+            y--;
+        }
+
+        circlePlot8(x, y, centre);
+        circlePlot8(y, x, centre);
+        circlePlot8(x, -y, centre);
+        circlePlot8(y, -x, centre);
+        circlePlot8(-x, -y, centre);
+        circlePlot8(-y, -x, centre);
+        circlePlot8(-x, y, centre);
+        circlePlot8(-y, x, centre);
+
+        x++;
+    }
+}
+
+[numthreads(5, 1, 1)]
+void Circles (uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    //int2 centre = texResolution >> 1;
+    // int2 centre = int2(random2((float)id.x + time) * texResolution);
+    // int radius = (int)(random((float)id.x) * 30);
+
+    int2 centre = circles[(int)id.x].origPos + circles[(int)id.x].velocity*time;
+    int radius = circles[(int)id.x].radius;
+
+    while(centre.x>texResolution)
+          centre.x-=texResolution;
+    while(centre.x<0)
+          centre.x+=texResolution;
+    while(centre.y>texResolution)
+          centre.y-=texResolution;
+    while(centre.y<0)
+          centre.y+=texResolution;                    
+    drawCircle(centre, radius);
+}
+
+[numthreads(8, 8, 1)]
+void Clear (uint3 id : SV_DispatchThreadID)
+{
+    Result[id.xy] = float4(0, 1, 0, 1);
+}   
+

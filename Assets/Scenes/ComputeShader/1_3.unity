@@ -389,7 +389,7 @@ GameObject:
   - component: {fileID: 837283251}
   - component: {fileID: 837283250}
   - component: {fileID: 837283249}
-  - component: {fileID: 837283248}
+  - component: {fileID: 837283253}
   m_Layer: 0
   m_Name: Quad
   m_TagString: Untagged
@@ -397,22 +397,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &837283248
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 837283247}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c0055bd0bfad1d64595cd7427a6f9711, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  shader: {fileID: 7200000, guid: 3ac47be440192d74180f8b726b5d6638, type: 3}
-  texResolution: 512
-  renderer: {fileID: 0}
-  outputTexture: {fileID: 0}
 --- !u!64 &837283249
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -500,6 +484,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &837283253
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 837283247}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f39f91c222119f04d8c3baf24aafeeb5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  kernelName: Square
+  shader: {fileID: 7200000, guid: cda1f54ab355047468e8cb55184765fc, type: 3}
+  texResolution: 512
+  render: {fileID: 0}
+  outputTexture: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

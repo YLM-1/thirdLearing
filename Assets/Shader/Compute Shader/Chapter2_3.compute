@@ -1,0 +1,37 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Teapots
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+// RWTexture2D<float4> Result;
+
+RWStructuredBuffer<float3> Result;
+
+float Random(float value, float seed = 0.546)
+{
+    return frac(sin(value+seed)*143758.5453);
+}
+
+float3 Random3(float value)
+{
+    return float3(Random(value,3.9812),
+                  Random(value,7.1536),
+                  Random(value,5.724));
+}
+
+float radius;
+float time;
+
+[numthreads(10,1,1)]
+void Teapots (uint3 id : SV_DispatchThreadID)
+{
+    float3 sinDir = normalize(Random3(id.x)*2-1);
+    float3 vec = normalize(Random3(id.x+1.23)*2-1);
+    float3 cosDir = normalize(cross(sinDir,vec));
+
+    float theat = time;
+
+    float3 pos = sinDir*sin(theat)+cosDir*cos(theat);
+    //尝试用 二维坐标索引 去访问缓冲区或纹理中的数据
+    Result[id.x] = pos*radius;
+}
