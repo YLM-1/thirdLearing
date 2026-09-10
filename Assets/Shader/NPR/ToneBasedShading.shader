@@ -71,7 +71,7 @@ Shader "Unlit/ToneBasedShading"
 
                 //Diffuse
                 float diff=dot(worldNormal,lightDir);
-                diff=diff*0.5+0.5;
+                diff=diff*0.5+0.5;                         
                 float diffuse=SAMPLE_TEXTURE2D(_ReampMap,sampler_ReampMap,float2(diff,i.uv.y));
 
                 //Specular

@@ -27,7 +27,9 @@ public class Chapter1_2 : MonoBehaviour
    {
          //kernelHandle 就是把耗时的高级函数名（如 "CSMain"）先翻译成 GPU 喜闻乐见的快捷数字代号（如 0）并存起来
          kernelHandle = shader.FindKernel("CSMain");
+         //把管道接入(ComputeShader)水源，负责填充数据
          shader.SetTexture(kernelHandle,"Result",outputTexture);
+         //把管道接入(Material渲染)水龙头，负责读取并展示数据
          renderer.material.SetTexture("_BaseMap",outputTexture);
    }
 

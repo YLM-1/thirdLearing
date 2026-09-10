@@ -7,7 +7,7 @@ Shader "Unlit/StylizedHighlights"
         _Color("Color", Color) = (1, 1, 1, 1)
         _OutLineWidth("Outline Width", Range(0, 0.1)) = 0.01
 
-        [Header((Specular Settings))]
+        [Header(Specular Settings)]
         _SpecularColor("Specular Color", Color) = (1, 1, 1, 1)
         _SpecularPower("Specular Power", Range(0, 100)) = 10
         _SpecularIntensity("Specular Intensity", Range(0, 2)) = 0.5
@@ -155,7 +155,7 @@ Shader "Unlit/StylizedHighlights"
                 float signY = 1;
                 if(tangentHalfDir.y < 0) 
                        signY = -1;
-                        tangentHalfDir -= float3(_SplitX * signX, _SplitY * signY, 0);
+                tangentHalfDir -= float3(_SplitX * signX, _SplitY * signY, 0);
                 tangentHalfDir = normalize(tangentHalfDir);
 
                 // 3.  Diffuse (漫反射)：此时 tangentLightDir.z 完美等于传统的 NdotL

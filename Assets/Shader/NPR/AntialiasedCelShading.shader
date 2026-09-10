@@ -25,6 +25,7 @@ Shader "Unlit/AntialiasedCelShading"
             #pragma fragment frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
             struct appdata
             {
                 float4 vertex : POSITION;
@@ -88,7 +89,7 @@ Shader "Unlit/AntialiasedCelShading"
                else
                    spec=1;
                float4 finalColor=_Color*NdotL+spec;
-               return finalColor; // 身体是纯白色
+               return finalColor; 
             }
             ENDHLSL
         }
