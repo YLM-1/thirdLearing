@@ -1,0 +1,68 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+struct Boid
+{
+    float3 position;
+    float3 direction;
+};
+
+float boidSpeed;
+float neighbourDistance;
+float boidCount;
+float deltatime;
+float3 flockPosition;
+
+float alignmentWeight;
+float cohesionWeight;
+float separationWeight;
+
+RWStructuredBuffer<Boid> boidBuffer;
+
+[numthreads(256,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    Boid thisBoid = boidBuffer[id.x];
+
+    float3 separation = 0;             //分离：个体有远离周围个体的趋势，防止相互碰撞
+    float3 alignment = 0;              //对齐：个体的速度大小与方向倾向于与伙伴保持一致
+    float3 cohesion = flockPosition;   // 靠近：个体有向伙伴平均位置移动的趋势
+
+    uint nearbyCount = 1;
+    for(int i = 0;i<boidCount;i++)
+    {
+        if(i!=id.x)
+        {
+            Boid otherBoid = boidBuffer[i];
+
+            float dist = length(thisBoid.position - otherBoid.position);
+            if(dist < neighbourDistance)
+            {
+                //先计算对齐和靠近效果
+                alignment+=otherBoid.direction;
+                cohesion+=otherBoid.position;
+
+                //再计算分离效果
+                // (1 / distance - 1 / neighbourDistance): 
+				// 其他boid越靠近当前boid，分离的权重越大
+				// 越远离直到neighbourDistance，分离的权重越小，直到权重为0
+                separation+=(thisBoid.position-otherBoid.position)*(1/dist-1/neighbourDistance);
+
+                nearbyCount++;
+            }
+        }
+    }
+
+    alignment /= nearbyCount;
+    cohesion /= nearbyCount;
+    cohesion = normalize(cohesion - thisBoid.position);
+
+    // thisBoid.direction = lerp(alignment+cohesion+separation,thisBoid.direction,0.95);
+    // thisBoid.position +=thisBoid.direction * boidSpeed *deltatime;
+
+    float3 avgWeight = alignment*alignmentWeight+cohesion*cohesionWeight+separation*separationWeight;
+    thisBoid.direction = lerp(avgWeight,normalize(thisBoid.direction),0.95);
+    thisBoid.position += thisBoid.direction*boidSpeed*deltatime;
+
+    boidBuffer[id.x] = thisBoid;
+}

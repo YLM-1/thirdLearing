@@ -1,0 +1,107 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+struct Particle
+{
+    float3 position;
+    float3 velocity;
+    float lifetime;
+    float3 color;
+};
+
+struct Vertex
+{
+    float3 position;
+    float2 uv;
+};
+
+RWStructuredBuffer<Particle> particleBuffer;
+RWStructuredBuffer<Vertex> vertexBuffer;
+
+float3 worldPosition;
+float speed;
+float deltaTime;
+float halfSize;
+
+uint rng_state;
+//1.初始化就是设定随机种子，不同的设定产生不同的伪随机序列
+//2.异或和移位每次都在上一次产生的值上产生新的值，因为在很大的值中舍弃了一些值，所以每次产生的值看起来就象是随机值，也就是伪随机数
+uint rand_xorshift()	
+{
+	// Xorshift algorithm from George Marsaglia's paper
+	rng_state ^= (rng_state << 13);
+	rng_state ^= (rng_state >> 17);
+	rng_state ^= (rng_state << 5);
+	return rng_state;
+}	
+
+// 让重生的粒子的位置和颜色都有一个新的随机值
+void respawn(uint id)
+{
+    rng_state = id;
+	float tmp = (1.0 / 4294967296.0);
+	float f0 = float(rand_xorshift()) * tmp - 0.5;
+	float f1 = float(rand_xorshift()) * tmp - 0.5;
+	float f2 = float(rand_xorshift()) * tmp - 0.5;
+    float3 normalF3 = normalize(float3(f0, f1, f2)) * 0.8f;
+	normalF3 *= float(rand_xorshift()) * tmp;
+
+    float x = normalF3.x + worldPosition.x;
+    float y = normalF3.y + worldPosition.y;
+    float z = normalF3.z + worldPosition.z;
+    particleBuffer[id].position = float3(x, y, z);
+    particleBuffer[id].velocity = 0;
+    particleBuffer[id].lifetime = 4;
+    particleBuffer[id].color = normalF3;
+}
+
+[numthreads(256,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    Particle p = particleBuffer[id.x];
+
+    //更新粒子的位置。来追随worldPosition
+    float3 dir = normalize(worldPosition-p.position);
+    p.velocity+=dir;
+    p.position+=p.velocity*speed*deltaTime;
+
+    p.lifetime-=deltaTime;
+
+    if(p.lifetime<0)
+       respawn(id.x);
+    
+       particleBuffer[id.x]=p;
+
+    // 计算vertex buffer
+    // 1 ----- 2(4)
+	// |tri1 /   |
+	// |    /    | 
+	// |   /tri2 |
+	// 0(3) ---- 5
+    int index = id.x*6;
+    vertexBuffer[index].position.x = p.position-halfSize;
+    vertexBuffer[index].position.y = p.position-halfSize;
+    vertexBuffer[index].position.z = p.position.z;
+
+    vertexBuffer[index+1].position.x = p.position-halfSize;
+    vertexBuffer[index+1].position.y = p.position+halfSize;
+    vertexBuffer[index+1].position.z = p.position.z;
+
+    vertexBuffer[index+2].position.x = p.position+halfSize;
+    vertexBuffer[index+2].position.y = p.position+halfSize;
+    vertexBuffer[index+2].position.z = p.position.z;
+
+    vertexBuffer[index+3].position.x = p.position-halfSize;
+    vertexBuffer[index+3].position.y = p.position-halfSize;
+    vertexBuffer[index+3].position.z = p.position.z;
+
+    vertexBuffer[index+4].position.x = p.position+halfSize;
+    vertexBuffer[index+4].position.y = p.position+halfSize;
+    vertexBuffer[index+4].position.z = p.position.z;
+
+    vertexBuffer[index+5].position.x = p.position+halfSize;
+    vertexBuffer[index+5].position.y = p.position-halfSize;
+    vertexBuffer[index+5].position.z = p.position.z;
+
+    particleBuffer[id.x] = p;
+}

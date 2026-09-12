@@ -151,7 +151,7 @@ Shader "Unlit/SchlickFresnel"
                 float NdotV=saturate(dot(i.worldNormal,i.viewDir));
                 //float3 fresnelColor=BasicRimRim(i.worldNormal,i.viewDir);     
                 //float3 fresnelColor=FuncschlickFresnel(_Bias,_Eta,_RimPower,NdotV);     
-                // float3 fresnel=SchlicFresnelSegment(i.viewNormal,_Bias,_Eta,_RimPower,NdotV);
+                //float3 fresnel=SchlicFresnelSegment(i.viewNormal,_Bias,_Eta,_RimPower,NdotV,_Inverse);
                 float3 fresnel=schlickFresnelSegmentColor(i.viewNormal,_Bias,_Eta,_RimPower,NdotV,_Inverse);
                 return float4(fresnel,1);
             }

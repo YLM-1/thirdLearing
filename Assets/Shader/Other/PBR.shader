@@ -166,6 +166,7 @@ Shader "Unlit/PBR"
                 float roughness=perceptualRoughness*perceptualRoughness;
                 roughness=max(roughness,0.002);//避免除0
 
+                //ks+kd=1
                 float kd=1.0 - lerp(0.04, 1.0, _Metallic);//简化版（1-Metallic）认为绝缘体材的kd为1，金属材质的kd为0太绝对了;
                 float3 albedo=SAMPLE_TEXTURE2D(_MainTex,sampler_MainTex,i.uv)*_Tint.rgb;
 
