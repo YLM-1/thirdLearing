@@ -1,0 +1,81 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+struct Ball
+{
+    float3 position;
+    float3 velocity;
+    float4 color;
+};
+RWStructuredBuffer<Ball> ballBuffer;
+
+float3 boundMin;
+float3 boundMax;
+float numOfBall;
+
+float gravity;
+float damping;
+float radius;
+
+float deltaTime;
+
+[numthreads(1,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+   Ball ball = ballBuffer[id.x];
+
+   ball.position += ball.velocity*deltaTime;
+
+   //step1:只做球和包围盒的碰撞
+   if(ball.position.x<boundMin.x||ball.position.x>boundMax.x)
+   {
+      ball.position.x = clamp(ball.position.x,boundMin.x,boundMax.x);
+      ball.velocity.x = -ball.velocity.x;
+   }
+
+   if(ball.position.z<boundMin.z||ball.position.z>boundMax.z)
+   {
+      ball.position.z = clamp(ball.position.z,boundMin.z,boundMax.z);
+      ball.velocity.z = -ball.velocity.z;
+   }
+
+   if(ball.position.y<boundMin.y||ball.position.y>boundMax.y)
+   {
+      ball.position.y = clamp(ball.position.y,boundMin.y,boundMax.y);
+      //ball.velocity.y = -ball.velocity.y;
+      //step3:添加阻尼
+      ball.velocity = -ball.velocity*damping;
+   }
+
+   //step2:添加重力
+   ball.velocity.y -= gravity*deltaTime;
+
+   //step3:添加小球之间的物理计算
+   float3 direction;//碰撞法线向量
+   float3 relativeVelocity;
+
+   for(int i=id.x+1;i<numOfBall;i++)
+   {
+       Ball otherBall = ballBuffer[(uint)i];
+
+       direction = ball.position - otherBall.position;
+       float dist = length(direction);
+
+       //当两个球体相交，则需要计算球体之间的挤开运动
+       if(dist<2*radius)
+       {
+          direction*=radius-0.5*dist;
+          ball.position+=direction;
+
+          //此时小球的position已经收敛，但是velocity还没有，同样需要收敛
+          direction = normalize(direction);
+          relativeVelocity = ball.velocity - otherBall.velocity;
+
+          direction *= dot( relativeVelocity, direction);
+
+          ball.velocity -= direction;
+       }
+   }
+
+   ballBuffer[id.x] = ball;
+}
