@@ -208,8 +208,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1014349880}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.008955333, y: 0.70648044, z: -0.009424445, w: -0.70761317}
-  m_LocalPosition: {x: 14.336439, y: 1.1425736, z: 0.4008716}
+  m_LocalRotation: {x: -0.010316433, y: 0.70574105, z: -0.010880528, w: -0.70831126}
+  m_LocalPosition: {x: 13.940315, y: 1.241285, z: -0.62972736}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -386,7 +386,7 @@ MonoBehaviour:
   ballCount: 1000
   ballGOs: {fileID: 1330271275}
   gravity: 2
-  damping: 0.6
+  damping: 0.8
 --- !u!65 &1403538943
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -552,17 +552,17 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 583ef0db1907b654d85aa5f2ff3e12eb,
         type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.031443007
+      value: -0.03144318
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 583ef0db1907b654d85aa5f2ff3e12eb,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.5
+      value: 0.49999976
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 583ef0db1907b654d85aa5f2ff3e12eb,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.17855136
+      value: -0.1785512
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 583ef0db1907b654d85aa5f2ff3e12eb,
         type: 3}
@@ -577,12 +577,12 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 583ef0db1907b654d85aa5f2ff3e12eb,
         type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: 0.000000022351742
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 583ef0db1907b654d85aa5f2ff3e12eb,
         type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: 0.0000000037252903
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 583ef0db1907b654d85aa5f2ff3e12eb,
         type: 3}
@@ -633,5 +633,5 @@ SceneRoots:
   m_Roots:
   - {fileID: 1014349883}
   - {fileID: 1777122342}
-  - {fileID: 1330271279}
   - {fileID: 1933447024}
+  - {fileID: 1330271279}

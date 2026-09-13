@@ -1,0 +1,55 @@
+#pragma kernel UpdateParticle
+
+struct RigidBody
+{
+    float3 position;
+    float4 quaternion;
+    float3 linearVelocity;
+    float3 angularVelocity;
+
+    float particleIndex;
+    float particleCount;
+};
+
+struct Particle
+{
+    float3 position;    //这里是世界坐标
+    float3 velocity;
+    float force;
+    float3 localPosition;
+    float3 offsetPosition;
+};
+
+shared RWStructuredBuffer<RigidBody> rigidBodyBuffer;
+shared RWStructuredBuffer<Particle> particleBuffer;
+
+// 将向量v旋转q之后得到的新的向量
+inline float3 quatMul(float4 q, float3 v)
+{
+  return dot(q.xyz, v) * q.xyz + q.w * q.w * v + 2.0 * q.w * cross(q.xyz, v) - cross(cross(q.xyz, v), q.xyz);
+}
+
+[numthreads(8,1,1)]
+void UpdateParticle (uint3 id : SV_DispatchThreadID)
+{
+   RigidBody body = rigidBodyBuffer[id.x];
+   int index = body.particleIndex;
+
+   for(int i=0 ; i<body.particleCount ; i++)
+   {
+        Particle particle = particleBuffer[index];
+        // 把局部相对位移通过旋转矩阵(这里通过四元数进行旋转)转换到世界坐标系
+        particle.offsetPosition = quatMul(body.quaternion,particle.localPosition);
+        //particle的计算都是在世界坐标下进行的
+        particle.position = body.position + particle.offsetPosition;
+        //粒子的速度 = 刚体的线速度 + 刚体的角速度
+        //线速度 = 角速度 X 半径
+        //整个木马底座正被卡车拉着往东以 5 m/s移动（整体线速度v）。
+        //同时木马底座自己在旋转。你站在边缘，旋转把你往东推了2m/s（旋转产生的切线速度）。
+        //那么你在这一瞬间相对于地面的真实速度，就是两个矢量相加：向东7m/s。
+        particle.velocity = body.linearVelocity + cross(body.angularVelocity,particle.offsetPosition);
+
+        particleBuffer[index] = particle;
+		index++;
+   }
+}
