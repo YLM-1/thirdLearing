@@ -1,4 +1,7 @@
 #pragma kernel UpdateParticle
+#pragma kernel ComputeParticle
+#pragma kernel ComputeRigidBody
+#pragma kernel ComputeRigidBodyMovement
 
 struct RigidBody
 {
@@ -7,21 +10,35 @@ struct RigidBody
     float3 linearVelocity;
     float3 angularVelocity;
 
-    float particleIndex;
-    float particleCount;
+    int particleIndex;
+    int particleCount;
 };
 
 struct Particle
 {
     float3 position;    //这里是世界坐标
     float3 velocity;
-    float force;
+    float3 force;
     float3 localPosition;
     float3 offsetPosition;
 };
 
 shared RWStructuredBuffer<RigidBody> rigidBodyBuffer;
 shared RWStructuredBuffer<Particle> particleBuffer;
+
+int allParticleCount;
+float particleDiameter;
+//粒子计算时候力的各种系数
+float springCoefficient;
+float dampingCoefficient;
+float tangentialCoefficient;
+float gravityCofficient;
+
+float linearForceScalar;
+float angularForceScalar;
+float deltaTime;
+float cubeMass;
+
 
 // 将向量v旋转q之后得到的新的向量
 inline float3 quatMul(float4 q, float3 v)
@@ -52,4 +69,108 @@ void UpdateParticle (uint3 id : SV_DispatchThreadID)
         particleBuffer[index] = particle;
 		index++;
    }
+}
+
+float3 ComputeParticleForce(int thisID,int otherID)
+{
+    float3 force = 0;
+    
+    //当前粒子需要计算的粒子
+    Particle thisParticle = particleBuffer[thisID];
+    //与当前粒子产生碰撞的其它的粒子
+    Particle otherParticle = particleBuffer[otherID];
+
+    float3 relativePosition = 0;
+    float3 otherParticleVelocity = 0;
+
+    if(otherID<0) 
+    {
+        //粒子和地面产生碰撞逻辑
+        float3 groundParticlePosition = thisParticle.position;
+        groundParticlePosition.y = min(-particleDiameter*0.5,thisParticle.position.y - particleDiameter*0.5);
+        relativePosition = groundParticlePosition - thisParticle.position;
+        otherParticleVelocity = 0;
+    }
+    else
+    {
+        relativePosition = otherParticle.position-thisParticle.position;
+        otherParticleVelocity = otherParticle.velocity;
+    }
+
+    float rpMag = length(relativePosition);
+    if(rpMag<particleDiameter)
+    {
+        //线性排斥力:也就是反弹力
+        float3 relativePositionNorm = relativePosition / rpMag;
+        float3 repulsiveForce = -springCoefficient*(particleDiameter-rpMag)*relativePositionNorm;
+
+        //阻尼
+        float3 relativeVelocity = otherParticle.velocity-thisParticle.velocity;
+        float3 dampingForce = dampingCoefficient * relativeVelocity;
+
+        //shear force
+        float3 tangentVelocity = relativeVelocity-(dot(relativeVelocity,relativePositionNorm)*relativePositionNorm);
+        float3 tangentialForce = tangentialCoefficient * tangentVelocity;
+
+        force = repulsiveForce+dampingForce+tangentialForce;
+    }
+    return force;
+}
+
+[numthreads(8,1,1)]
+void ComputeParticle (uint3 id : SV_DispatchThreadID)
+{
+    float3 force = 0;
+
+    // 修改粒子迭代的index，从-1开始，-1表示地面作为一个单独的粒子和其他粒子产生碰撞
+	// 以此来模拟粒子和地面碰撞效果
+    for(int i=-1;i<allParticleCount;i++)
+    {
+        if(i==(int)id.x)
+          continue;
+        force+=ComputeParticleForce(id.x,i);  
+    }
+    
+    force.y -=9.8*gravityCofficient;
+    particleBuffer[id.x].force = force;
+}
+
+[numthreads(8,1,1)]
+void ComputeRigidBody (uint3 id : SV_DispatchThreadID)
+{
+    RigidBody body = rigidBodyBuffer[id.x];
+
+    float3 linearForce=0;//它改变的是刚体整体在空间中的位置（平移）。
+    float3 angularForce=0;//它改变的是刚体绕质心旋转的角度与快慢（旋转）
+
+    for(int i = 0;i<body.particleCount;i++)
+    {
+        Particle particle = particleBuffer[body.particleIndex + i];
+        linearForce +=particle.force;
+        angularForce +=cross(particle.offsetPosition,particle.force);
+    }
+
+    //v = P/m ,P=F*t
+    body.linearVelocity +=linearForceScalar*linearForce*deltaTime/cubeMass;
+    body.angularVelocity +=angularForceScalar*angularForce*deltaTime;
+
+    rigidBodyBuffer[id.x]=body;
+}
+
+// 将两个四元数旋转相连接
+inline float4 quatConcat(float4 q1, float4 q2)
+{
+  return float4(q1.w * q2.xyz + q2.w * q1.xyz + cross(q1.xyz, q2.xyz), q1.w * q2.w - dot(q1.xyz, q2.xyz));
+}
+
+[numthreads(8,1,1)]
+void ComputeRigidBodyMovement(uint3 id : SV_DispatchThreadID)
+{
+    RigidBody body = rigidBodyBuffer[id.x];
+    body.position += body.linearVelocity*deltaTime;
+
+    float4 omega = float4(body.angularVelocity, 0);
+	body.quaternion = normalize(body.quaternion + deltaTime * (0.5 * quatConcat(omega, body.quaternion)));
+
+    rigidBodyBuffer[id.x]=body;
 }

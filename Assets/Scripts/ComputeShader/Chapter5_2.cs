@@ -15,7 +15,7 @@ public class Chapter5_2 : MonoBehaviour
        public Vector3 linearVelocity;   //描述刚体运动时横纵坐标（位移）的运动快慢（整体平均速度）
        public Vector3 angularVelocity;  //描述刚体在运动时角度随时间运动的快慢（旋转角速度）
 
-       public int particleIndex;       //组成刚体的粒子的index
+       public int particleIndex;       //第0个粒子在全局数组里的下标
        public int particleCount;
 
        public RigidBody(Vector3 pos,int pIndex,int pCount)
@@ -38,10 +38,10 @@ public class Chapter5_2 : MonoBehaviour
    };
 
    //初始化rigdBody,particles
-   public int rigidBodyCount = 1000;
-   public float rigidBodyRange = 20f;
-   public float edgeLength = 1f;      //立方体的边长
-   public int particlesPerEdge = 4;    //立方体每条变最多有几个粒子
+   [SerializeField]private int rigidBodyCount = 1000;
+   [SerializeField]private float rigidBodyRange = 20f;
+   [SerializeField]private float edgeLength = 1f;      //立方体的边长
+   [SerializeField]private int particlesPerEdge = 4;    //立方体每条变最多有几个粒子
 
    RigidBody[] rigidBodies;
    Particle[] particles;
@@ -53,21 +53,43 @@ public class Chapter5_2 : MonoBehaviour
    ComputeBuffer argsBuffer;
 
    //初始化shader
-   public ComputeShader cs;
-   public Mesh cubeMesh;
-   public Material cubeMat;
+   [SerializeField]private ComputeShader cs;
+   [SerializeField]private Mesh cubeMesh;
+   [SerializeField]private Material cubeMat;
 
    Bounds bounds;
    uint[] args = new uint[5] {0,0,0,0,0};
 
    int kernelUpdateParticle;
+   int kernelComputeParticle;
+   int kernelComputeRigidBody;
+   int kernelComputeRigidBodyMovement;
+
+    [SerializeField]private float springCoefficient=1f;
+    [SerializeField]private float dampingCoefficient=0.1f;
+    [SerializeField]private float tangentialCoefficient=1f;
+    [SerializeField]private float gravityCofficient=1f;
+
+    //debug
+    [SerializeField] private bool isDebugParticle=false;
+    [SerializeField] private Mesh debugParticleMesh;
+    [SerializeField] private Material debugParticleMat;
+    ComputeBuffer debugParticlesBuffer;
+    uint[] debugArgs = new uint[5]{0,0,0,0,0};
+
+    [SerializeField] private float linearForceScalar=1f;
+    [SerializeField] private float angularForceScalar=1f;
+    [SerializeField] private float cubeMass=10f;
+
 
    private void Start()
    {
        InitRigdBody();
        InitParticle();
        InitBuffer();
+       InitMesh();
        InitShader();
+       InitInstancing();
    }
 
    private void InitShader()
@@ -75,6 +97,28 @@ public class Chapter5_2 : MonoBehaviour
        kernelUpdateParticle = cs.FindKernel("UpdateParticle");
        cs.SetBuffer(kernelUpdateParticle,"rigidBodyBuffer",rigidBodyBuffer);
        cs.SetBuffer(kernelUpdateParticle,"particleBuffer",particleBuffer);
+
+       kernelComputeParticle = cs.FindKernel("ComputeParticle");
+       cs.SetBuffer(kernelComputeParticle,"particleBuffer",particleBuffer);
+
+       cs.SetInt("allParticleCount",particlesPerBody*rigidBodyCount);
+       cs.SetFloat("particleDiameter",edgeLength/particlesPerEdge);
+       //粒子计算时候力的各种系数
+       cs.SetFloat("springCoefficient",springCoefficient);
+       cs.SetFloat("dampingCoefficient",dampingCoefficient);
+       cs.SetFloat("tangentialCoefficient",tangentialCoefficient);
+       cs.SetFloat("gravityCofficient",gravityCofficient);
+
+       kernelComputeRigidBody = cs.FindKernel("ComputeRigidBody");
+       cs.SetBuffer(kernelComputeRigidBody,"rigidBodyBuffer",rigidBodyBuffer);
+       cs.SetBuffer(kernelComputeRigidBody,"particleBuffer",particleBuffer);
+       cs.SetFloat("linearForceScalar",linearForceScalar);
+       cs.SetFloat("angularForceScalar",angularForceScalar);
+       cs.SetFloat("cubeMass",cubeMass);
+
+       kernelComputeRigidBodyMovement = cs.FindKernel("ComputeRigidBodyMovement");
+       cs.SetBuffer(kernelComputeRigidBodyMovement,"rigidBodyBuffer",rigidBodyBuffer);
+
    }
 
    private void InitRigdBody()
@@ -136,35 +180,44 @@ public class Chapter5_2 : MonoBehaviour
       particleBuffer.SetData(particles);
    }
 
-   //它的主要作用是在 Scene（场景）视图中绘制辅助线框、形状或图标，用于帮助开发者在编辑器里直观地调试和查看数据，
-   // 而不会渲染到最终的游戏画面（Game 视图）中。
-   //只要把这个方法写在继承自 MonoBehaviour 的脚本里，Unity 会在编辑器模式或运行模式下自动每帧调用它。
-    private void OnDrawGizmos()
+    private void InitMesh()
     {
-        if(rigidBodies!=null)
-        {
-            for(int i=0;i<rigidBodies.Length;i++)
-            {
-                //绘制Cube
-                //都以当前刚体的位置和朝向作为临时原点与坐标轴
-                Gizmos.matrix = Matrix4x4.TRS(rigidBodies[i].position,rigidBodies[i].quaternion,Vector3.one);//S:缩放
-                Gizmos.color = Color.green;
-                Gizmos.DrawWireCube(Vector3.zero,Vector3.one*edgeLength);//绘制边框
+        bounds = new Bounds(Vector3.zero,Vector3.one*edgeLength);
+        args[0] = (uint)cubeMesh.GetIndexCount(0);
+        args[1] = (uint)rigidBodyCount;
+        argsBuffer = new ComputeBuffer(1,5*sizeof(uint),ComputeBufferType.IndirectArguments);
+        argsBuffer.SetData(args);
 
-                //绘制Particles
-                Gizmos.color = Color.white;
-                for(int j=0;j<rigidBodies[i].particleCount;j++)
-                {
-                    Vector3 particlePos = particles[rigidBodies[i].particleIndex+j].localPosition;
-                    Gizmos.DrawWireSphere(particlePos,edgeLength/particlesPerEdge/2f);
-                }
-            }
-        }
+        debugArgs[0] = debugParticleMesh.GetIndexCount(0);
+        debugArgs[1] = (uint)(rigidBodyCount*particlesPerBody);
+        debugParticlesBuffer = new ComputeBuffer(1,sizeof(uint)*5,ComputeBufferType.IndirectArguments);
+        debugParticlesBuffer.SetData(debugArgs);
+    }
+
+    private void InitInstancing()
+    {
+        cubeMat.SetBuffer("rigidBodyBuffer",rigidBodyBuffer);
+        cubeMat.SetFloat("edgeLength",edgeLength);
+
+        debugParticleMat.SetBuffer("particleBuffer",particleBuffer);
+        debugParticleMat.SetFloat("particleDiameter",edgeLength/particlesPerEdge);
     }
 
     private void Update()
     {
+        cs.SetFloat("deltaTime",Time.deltaTime);
+
         cs.Dispatch(kernelUpdateParticle,Mathf.CeilToInt((float)rigidBodyCount/8),1,1);
+        cs.Dispatch(kernelComputeParticle,Mathf.CeilToInt((float)rigidBodyCount*particlesPerBody)/8,1,1);
+        cs.Dispatch(kernelComputeRigidBody,Mathf.CeilToInt((float)rigidBodyCount/8),1,1);
+        cs.Dispatch(kernelComputeRigidBodyMovement,Mathf.CeilToInt((float)rigidBodyCount/8),1,1);
+
+        if(isDebugParticle)
+           Graphics.DrawMeshInstancedIndirect(debugParticleMesh,0,debugParticleMat,bounds,debugParticlesBuffer);
+        else
+           Graphics.DrawMeshInstancedIndirect(cubeMesh,0,cubeMat,bounds,argsBuffer);   
+
+        
     }
 
     private void OnDestroy()
@@ -172,5 +225,32 @@ public class Chapter5_2 : MonoBehaviour
         rigidBodyBuffer?.Release();
         particleBuffer?.Release();
         argsBuffer?.Release();
+        debugParticlesBuffer?.Release();
     }
+
+    //它的主要作用是在 Scene（场景）视图中绘制辅助线框、形状或图标，用于帮助开发者在编辑器里直观地调试和查看数据，
+    // 而不会渲染到最终的游戏画面（Game 视图）中。
+    //只要把这个方法写在继承自 MonoBehaviour 的脚本里，Unity 会在编辑器模式或运行模式下自动每帧调用它。
+    // private void OnDrawGizmos()
+    // {
+    //     if(rigidBodies!=null)
+    //     {
+    //         for(int i=0;i<rigidBodies.Length;i++)
+    //         {
+    //             //绘制Cube
+    //             //都以当前刚体的位置和朝向作为临时原点与坐标轴
+    //             Gizmos.matrix = Matrix4x4.TRS(rigidBodies[i].position,rigidBodies[i].quaternion,Vector3.one);//S:缩放
+    //             Gizmos.color = Color.green;
+    //             Gizmos.DrawWireCube(Vector3.zero,Vector3.one*edgeLength);//绘制边框
+
+    //             //绘制Particles
+    //             Gizmos.color = Color.white;
+    //             for(int j=0;j<rigidBodies[i].particleCount;j++)
+    //             {
+    //                 Vector3 particlePos = particles[rigidBodies[i].particleIndex+j].localPosition;
+    //                 Gizmos.DrawWireSphere(particlePos,edgeLength/particlesPerEdge/2f);
+    //             }
+    //         }
+    //     }
+    // }
 }
