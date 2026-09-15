@@ -375,23 +375,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 92cdffd62785e014ea66f6ffba7ef8cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  rigidBodyCount: 20
-  rigidBodyRange: 10
-  edgeLength: 1
+  rigidBodyCount: 100
+  rigidBodyRange: 50
+  edgeLength: 10
   particlesPerEdge: 4
   cs: {fileID: 7200000, guid: ef23f94127150124f8f4743e974738e7, type: 3}
   cubeMesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
   cubeMat: {fileID: 2100000, guid: 88a8ab0cbdf95ed4b8306982ab97fed8, type: 2}
-  springCoefficient: 100
+  springCoefficient: 50
   dampingCoefficient: 0.1
-  tangentialCoefficient: 1
-  gravityCofficient: 50
+  tangentialCoefficient: 0.01
+  gravityCofficient: 1
   isDebugParticle: 0
   debugParticleMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
   debugParticleMat: {fileID: 2100000, guid: 1ef7548ce0546034ca9f140a3eba4810, type: 2}
   linearForceScalar: 1
   angularForceScalar: 1
-  cubeMass: 20
+  cubeMass: 1
 --- !u!4 &1986533153
 Transform:
   m_ObjectHideFlags: 0

@@ -235,6 +235,8 @@ Shader "Unlit/Grass"
             float f=pow(t,_Curve)*forward;
 
             float3x3 currentMat = (i == 0) ? facingMat : mat;
+
+            //在这里，我修改了坐标轴x轴：宽度 ,y轴：向前弯曲 ,z轴：草的高度
             triStream.Append(VertexOutPut(pos,float3(w,f,h), float3(0,-1,f),float2(0,t),currentMat));
             triStream.Append(VertexOutPut(pos,float3(-w,f,h), float3(0,-1,f),float2(1,t),currentMat));
         }
@@ -267,10 +269,10 @@ Shader "Unlit/Grass"
             float f = pow(t, _Curve) * forward;
             float3x3 currentMat = i == 0 ? facingMat : mat;
 
-            triStream.Append(ShadowVertexOutPut(pos, float3(w, f, h), float3(0, -1, f), float2(0, t), currentMat));
-            triStream.Append(ShadowVertexOutPut(pos, float3(-w, f, h), float3(0, -1, f), float2(1, t), currentMat));
+            triStream.Append(ShadowVertexOutPut(pos, float3(w, f, h), float3(0, -1, t), float2(0, t), currentMat));
+            triStream.Append(ShadowVertexOutPut(pos, float3(-w, f, h), float3(0, -1, t), float2(1, t), currentMat));
         }
-        triStream.Append(ShadowVertexOutPut(pos, float3(0, forward, height), float3(0, -1, forward), float2(0.5, 1), mat));
+        triStream.Append(ShadowVertexOutPut(pos, float3(0, forward, height), float3(0, -1, 1), float2(0.5, 1), mat));
     }
     ENDHLSL
     SubShader

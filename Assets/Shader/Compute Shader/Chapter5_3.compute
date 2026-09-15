@@ -1,0 +1,332 @@
+#pragma kernel UpdateParticle
+#pragma kernel ComputeParticle
+#pragma kernel ComputeRigidBody
+#pragma kernel ComputeRigidBodyMovement
+#pragma kernel PopulateGrid
+#pragma kernel ClearGrid
+#pragma kernel ComputeParticleInGrid
+
+struct RigidBody
+{
+    float3 position;
+    float4 quaternion;
+    float3 linearVelocity;
+    float3 angularVelocity;
+
+    int particleIndex;
+    int particleCount;
+};
+
+struct Particle
+{
+    float3 position;    //这里是世界坐标
+    float3 velocity;
+    float3 force;
+    float3 localPosition;
+    float3 offsetPosition;
+};
+
+struct Voxel
+{
+    int4 upper;
+    int4 bottom;
+};
+
+shared RWStructuredBuffer<RigidBody> rigidBodyBuffer;
+shared RWStructuredBuffer<Particle> particleBuffer;
+shared RWStructuredBuffer<Voxel> voxelGridBuffer;
+
+int allParticleCount;
+float particleDiameter;
+//粒子计算时候力的各种系数
+float springCoefficient;
+float dampingCoefficient;
+float tangentialCoefficient;
+float gravityCofficient;
+
+float linearForceScalar;
+float angularForceScalar;
+float deltaTime;
+float cubeMass;
+
+
+// 将向量v旋转q之后得到的新的向量
+inline float3 quatMul(float4 q, float3 v)
+{
+  return dot(q.xyz, v) * q.xyz + q.w * q.w * v + 2.0 * q.w * cross(q.xyz, v) - cross(cross(q.xyz, v), q.xyz);
+}
+
+[numthreads(8,1,1)]
+void UpdateParticle (uint3 id : SV_DispatchThreadID)
+{
+   RigidBody body = rigidBodyBuffer[id.x];
+   int index = body.particleIndex;
+
+   for(int i=0 ; i<body.particleCount ; i++)
+   {
+        Particle particle = particleBuffer[index];
+        // 把局部相对位移通过旋转矩阵(这里通过四元数进行旋转)转换到世界坐标系
+        particle.offsetPosition = quatMul(body.quaternion,particle.localPosition);
+        //particle的计算都是在世界坐标下进行的
+        particle.position = body.position + particle.offsetPosition;
+        //粒子的速度 = 刚体的线速度 + 刚体的角速度
+        //线速度 = 角速度 X 半径
+        //整个木马底座正被卡车拉着往东以 5 m/s移动（整体线速度v）。
+        //同时木马底座自己在旋转。你站在边缘，旋转把你往东推了2m/s（旋转产生的切线速度）。
+        //那么你在这一瞬间相对于地面的真实速度，就是两个矢量相加：向东7m/s。
+        particle.velocity = body.linearVelocity + cross(body.angularVelocity,particle.offsetPosition);
+
+        particleBuffer[index] = particle;
+		index++;
+   }
+}
+
+float3 ComputeParticleForce(int thisID,int otherID)
+{
+    float3 force = 0;
+    
+    //当前粒子需要计算的粒子
+    Particle thisParticle = particleBuffer[thisID];
+
+    float3 relativePosition = 0;
+    float3 otherParticleVelocity = 0;
+
+    if(otherID<0) 
+    {
+        //粒子和地面产生碰撞逻辑
+        float3 groundParticlePosition = thisParticle.position;
+        groundParticlePosition.y = min(-particleDiameter*0.5,thisParticle.position.y - particleDiameter*0.5);
+        relativePosition = groundParticlePosition - thisParticle.position;
+        otherParticleVelocity = 0;
+    }
+    else
+    {
+        //与当前粒子产生碰撞的其它的粒子
+        Particle otherParticle = particleBuffer[otherID];
+        relativePosition = otherParticle.position-thisParticle.position;
+        otherParticleVelocity = otherParticle.velocity;
+    }
+
+    float rpMag = length(relativePosition);
+    if(rpMag>1e-5&&rpMag<particleDiameter)
+    {
+        //线性排斥力:也就是反弹力
+        float3 relativePositionNorm = relativePosition / rpMag;
+        float3 repulsiveForce = -springCoefficient*(particleDiameter-rpMag)*relativePositionNorm;
+
+        //阻尼
+        float3 relativeVelocity = otherParticleVelocity-thisParticle.velocity;
+        float3 dampingForce = dampingCoefficient * relativeVelocity;
+
+        //shear force
+        float3 tangentVelocity = relativeVelocity-(dot(relativeVelocity,relativePositionNorm)*relativePositionNorm);
+        float3 tangentialForce = tangentialCoefficient * tangentVelocity;
+
+        force = repulsiveForce+dampingForce+tangentialForce;
+    }
+    return force;
+}
+
+[numthreads(8,1,1)]
+void ComputeParticle (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x >= (uint)allParticleCount)
+        return;
+
+    float3 force = 0;
+
+    // 修改粒子迭代的index，从-1开始，-1表示地面作为一个单独的粒子和其他粒子产生碰撞
+	// 以此来模拟粒子和地面碰撞效果
+    for(int i=-1;i<allParticleCount;i++)
+    {
+        if(i==(int)id.x)
+          continue;
+        force+=ComputeParticleForce(id.x,i);  
+    }
+    
+    force.y -=9.8*gravityCofficient;
+    particleBuffer[id.x].force = force;
+}
+
+[numthreads(8,1,1)]
+void ComputeRigidBody (uint3 id : SV_DispatchThreadID)
+{
+    RigidBody body = rigidBodyBuffer[id.x];
+
+    float3 linearForce=0;//它改变的是刚体整体在空间中的位置（平移）。
+    float3 angularForce=0;//它改变的是刚体绕质心旋转的角度与快慢（旋转）
+
+    for(int i = 0;i<body.particleCount;i++)
+    {
+        Particle particle = particleBuffer[body.particleIndex + i];
+        linearForce +=particle.force;
+        angularForce +=cross(particle.offsetPosition,particle.force);
+    }
+
+    //v = P/m ,P=F*t
+    body.linearVelocity +=linearForceScalar*linearForce*deltaTime/cubeMass;
+    body.angularVelocity +=angularForceScalar*angularForce*deltaTime;
+
+    rigidBodyBuffer[id.x]=body;
+}
+
+// 将两个四元数旋转相连接
+inline float4 quatConcat(float4 q1, float4 q2)
+{
+  return float4(q1.w * q2.xyz + q2.w * q1.xyz + cross(q1.xyz, q2.xyz), q1.w * q2.w - dot(q1.xyz, q2.xyz));
+}
+
+[numthreads(8,1,1)]
+void ComputeRigidBodyMovement(uint3 id : SV_DispatchThreadID)
+{
+    RigidBody body = rigidBodyBuffer[id.x];
+    body.position += body.linearVelocity*deltaTime;
+
+    float4 omega = float4(body.angularVelocity, 0);
+	body.quaternion = normalize(body.quaternion + deltaTime * (0.5 * quatConcat(omega, body.quaternion)));
+
+    rigidBodyBuffer[id.x]=body;
+}
+
+//grid网格优化
+float3 gridStartPos;
+float gridSize;
+int GetParticleGridIndex(int id)
+{
+    // 假如 一个粒子的 position是 (x, y, z), 用一个唯一标识符表示它的id
+	// id = x + gridSize * y + gridSize * gridSize * z 
+    // 世界坐标 -> 网格坐标：先平移到网格起点，再除以格子边长并向下取整
+    float3 gridLocation = floor((particleBuffer[id].position - gridStartPos.xyz) / particleDiameter);
+    return gridLocation.x+gridLocation.y*gridSize+gridSize*gridSize*gridLocation.z;
+}
+
+[numthreads(1024,1,1)]
+void PopulateGrid(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x >= (uint)allParticleCount)
+        return;
+
+    int index = GetParticleGridIndex(id.x);
+    int gridMax = gridSize*gridSize*gridSize;
+
+    if(index<gridMax&&index>=0)
+    {
+        Voxel voxel = voxelGridBuffer[index];
+
+        //初始化时，这个 voxel 格子的 8 个槽位（upper.x/y/z/w 和 bottom.x/y/z/w）肯定全都被设成了 -1（代表“空槽”）。
+        if(voxel.upper.x==-1)
+           voxel.upper.x = id.x;
+        else if(voxel.upper.y==-1)
+           voxel.upper.y = id.x;
+        else if(voxel.upper.z==-1)
+           voxel.upper.z = id.x;
+        else if(voxel.upper.w==-1)
+           voxel.upper.w = id.x;
+        else if(voxel.bottom.x==-1)
+           voxel.bottom.x = id.x;   
+        else if(voxel.bottom.y==-1)
+           voxel.bottom.y = id.x;  
+        else if(voxel.bottom.z==-1)
+           voxel.bottom.z = id.x;     
+        else if(voxel.bottom.w==-1)
+           voxel.bottom.w = id.x;  
+        voxelGridBuffer[index] = voxel;   
+    }
+}
+
+[numthreads(1024,1,1)]
+void ClearGrid(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x >= (uint)(gridSize*gridSize*gridSize))
+        return;
+
+    Voxel voxel = voxelGridBuffer[id.x];
+    voxel.upper.x = voxel.upper.y = voxel.upper.z = voxel.upper.w = -1;
+    voxel.bottom.x = voxel.bottom.y = voxel.bottom.z = voxel.bottom.w = -1;
+    voxelGridBuffer[id.x] = voxel;
+}
+
+int GetGridIndex(int x,int y,int z)
+{
+    return x+y*gridSize+z*gridSize*gridSize;
+}
+
+float3 ComputeParticleForceInGrid(int thisID,int x,int y,int z)
+{
+    float3 force = 0;
+    if(x>-1&&y>-1&&z>-1&&x<gridSize&&y<gridSize&&z<gridSize)
+    {
+        int index = GetGridIndex(x,y,z);
+        int gridMax = gridSize*gridSize*gridSize;
+
+        if(index<gridMax)
+        {
+            Voxel voxel = voxelGridBuffer[index];
+            int otherID = voxel.upper.x;
+			// 开始判断当前粒子的周围是否有其他粒子
+			if (otherID > -1 && otherID != thisID)
+				force += ComputeParticleForce(thisID, otherID);
+
+			otherID = voxel.upper.y;
+			if (otherID > -1 && otherID != thisID)
+				force += ComputeParticleForce(thisID, otherID);
+
+			otherID = voxel.upper.z;
+			if (otherID > -1 && otherID != thisID)
+				force += ComputeParticleForce(thisID, otherID);
+
+			otherID = voxel.upper.w;
+			if (otherID > -1 && otherID != thisID)
+				force += ComputeParticleForce(thisID, otherID);
+
+			otherID = voxel.bottom.x;
+			if (otherID > -1 && otherID != thisID)
+				force += ComputeParticleForce(thisID, otherID);
+
+			otherID = voxel.bottom.y;
+			if (otherID > -1 && otherID != thisID)
+				force += ComputeParticleForce(thisID, otherID);
+
+			otherID = voxel.bottom.z;
+			if (otherID > -1 && otherID != thisID)
+				force += ComputeParticleForce(thisID, otherID);
+
+			otherID = voxel.bottom.w;
+			if (otherID > -1 && otherID != thisID)
+				force += ComputeParticleForce(thisID, otherID);
+        }
+    }
+
+    return force;
+}
+
+[numthreads(1024,1,1)]
+void ComputeParticleInGrid(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x >= (uint)allParticleCount)
+        return;
+
+    int thisID = (int)id.x;
+    float3 force = 0;
+
+    //粒子与地面的碰撞
+    force = ComputeParticleForce(thisID,-1);
+
+    //首先得到当前粒子的网格坐标
+    float3 gridLocation = floor((particleBuffer[thisID].position - gridStartPos) / particleDiameter);
+
+    //得到当前粒子27个邻域grid的位置
+    for(int x = gridLocation.x-1;x<=gridLocation.x+1;++x)
+    {
+        for(int y = gridLocation.y-1;y<=gridLocation.y+1;++y)
+        {
+            for(int z = gridLocation.z-1;z<=gridLocation.z+1;++z)
+            {
+                force += ComputeParticleForceInGrid(thisID,x,y,z);
+            }
+        }
+    }
+    
+    force.y -=9.8*gravityCofficient;
+    particleBuffer[thisID].force = force;
+}
