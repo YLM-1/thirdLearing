@@ -290,6 +290,8 @@ MonoBehaviour:
     m_Bits: 0
   character: {fileID: 0}
   trampleRadius: 3
+  useFrustumCulling: 1
+  useClipSpace: 1
 --- !u!64 &630906540
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -399,7 +401,7 @@ MonoBehaviour:
   grassPerfab: {fileID: 919132149155446097, guid: e7c00a2269aadf6408bc370f0e422b09,
     type: 3}
   pitchScale: 10
-  density: 2
+  density: 5
   grassScale: 0.2
   leanMax: 30
   mat: {fileID: 2100000, guid: d31e3040213bcc74bae140a33fbfc063, type: 2}
@@ -412,7 +414,9 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 64
   character: {fileID: 1543821626}
-  trampleRadius: 0.3
+  trampleRadius: 0.5
+  useFrustumCulling: 1
+  useClipSpace: 1
 --- !u!64 &794894411
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -576,7 +580,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 60
+  field of view: 41
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
@@ -602,13 +606,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 965101122}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.2416858, y: -0.1934421, z: 0.048142627, w: -0.9496581}
+  m_LocalRotation: {x: -0.24503316, y: -0.19361053, z: 0.047460124, w: -0.9487999}
   m_LocalPosition: {x: -2.0975792, y: 3.2062755, z: -4.7733784}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 28.905, y: 23.148, z: 0.316}
 --- !u!114 &965101126
 MonoBehaviour:
   m_ObjectHideFlags: 0

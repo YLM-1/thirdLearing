@@ -4,6 +4,7 @@
 #define PI 3.14159266369
 #include "noiseSimplex.cginc"
 #pragma multi_compile _ UseFrustumCulling
+#pragma multi_compile _ UseClipSpace
 
 struct GrassClump
 {
@@ -33,7 +34,31 @@ float trampleRadius;
     float3 grassBoundsMax;
     int grassCount;
 
+    //方法一：
     float4 planes[6];
+
+    //判断一个点是否在平面外
+    //ax+by+cz+d>0,在平面外，即在法线的前方
+    //ax+by+cz+d=0,在平面上
+    //ax+by+cz+d<0,在平面内，即在法线的后方
+    bool IsOutsideThePlane(float4 plane,float3 pointPosition)
+    {
+        if(dot(plane.xyz,pointPosition)+plane.w>0)
+           return true;
+        return false;   
+    }
+
+    //方法二：
+    float4x4 vp;
+    //通过对裁剪空间下的AABB顶点的齐次坐标进行判定
+    //如果有一个点在裁剪空间，则物体可见
+    //OpenGL是(-w,w),DX是(0,w)
+    bool IsInClipSpace(float4 clipPos)
+    {
+        return -clipPos.w <= clipPos.x && clipPos.x <= clipPos.w
+            && -clipPos.w <= clipPos.y && clipPos.y <= clipPos.w
+            && -clipPos.w <= clipPos.z && clipPos.z <= clipPos.w;
+    }
 #else 
     RWStructuredBuffer<GrassClump> clumpsBuffer;
 #endif         
@@ -54,9 +79,55 @@ float4 mapVector(float3 v0,float3 v1)
 void LeanGrass (uint3 id : SV_DispatchThreadID)
 {
     #if defined(UseFrustumCulling)
-        if(id.x>grassCount)
+        if(id.x>=grassCount)    
            return;
         GrassClump clumps = clumpsRawBuffer[id.x];
+
+        // 视锥体裁剪
+        // 均在世界空间坐标系下
+        float3 boundsVerts[8];  // 每一个草的包围盒AABB的8个顶点
+        //grassBoundsMain是相对于草的自身坐标系，clumps.positoin是相对于世界坐标系
+        //“相当于把 clumps.position 当成坐标参考原点，然后 grassBounds.min 表示相对于这个点的偏移。就算出在世界坐标的包围盒值
+        boundsVerts[0] = clumps.position + grassBoundsMin;
+        boundsVerts[1] = clumps.position + grassBoundsMax;
+        boundsVerts[2] = clumps.position + float3(grassBoundsMax.x, grassBoundsMax.y, grassBoundsMin.z);
+        boundsVerts[3] = clumps.position + float3(grassBoundsMax.x, grassBoundsMin.y, grassBoundsMax.z);
+        boundsVerts[4] = clumps.position + float3(grassBoundsMax.x, grassBoundsMin.y, grassBoundsMin.z);
+        boundsVerts[5] = clumps.position + float3(grassBoundsMin.x, grassBoundsMax.y, grassBoundsMax.z);
+        boundsVerts[6] = clumps.position + float3(grassBoundsMin.x, grassBoundsMax.y, grassBoundsMin.z);
+        boundsVerts[7] = clumps.position + float3(grassBoundsMin.x, grassBoundsMin.y, grassBoundsMax.z);
+
+        #if defined(UseClipSpace)
+            bool isIn = false;
+            for(int i=0;i<8;i++)
+            {
+                float4 clipPos = mul(vp,float4(boundsVerts[i],1));
+                if(IsInClipSpace(clipPos))
+                {
+                    isIn = true;
+                    break;
+                }
+            }
+            if(!isIn)
+            return;   
+        
+        #else       
+            //遍历所有的视锥体平面
+            for(int i=0;i<6;i++)
+            {
+                //遍历所有的AABB点
+                for(int j = 0;j<8;j++)
+                {
+                    float3 boundsPosition = boundsVerts[j];
+                    //如果有一个点在视锥体内则不用判断，此AABB就在视锥体内，不剔除
+                    if(!IsOutsideThePlane(planes[i],boundsPosition))
+                    break;
+                    //如果8个顶点都在某个平面法线背面，则肯定在视锥体外，不能进入 clumpsBuffer
+                    if(j==7)
+                    return;
+                }
+            }
+        #endif    
     #else
         GrassClump clumps = clumpsBuffer[id.x];
     #endif    

@@ -2,6 +2,7 @@ Shader "Unlit/Chapter6_1"
 {
     Properties
     {
+        _BaseMap("Base Map",2D)="white"{}
     }
     SubShader
     {
@@ -30,6 +31,9 @@ Shader "Unlit/Chapter6_1"
                 float4 vertex : SV_POSITION;
                 float3 normalWS:TEXCOORD1;
             };
+
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
 
             struct GrassClump
             {
@@ -128,7 +132,10 @@ Shader "Unlit/Chapter6_1"
                 float3 lightDir = normalize(light.direction);
                 float3 normalWS = normalize(i.normalWS);
                 float NdotL = dot(lightDir,normalWS)*0.5+0.5;
-                float3 col = NdotL*light.color.xyz;
+
+                float3 baseColor=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).xyz;
+
+                float3 col = NdotL*light.color.xyz*baseColor;
                 return float4(col,1);
             }
             ENDHLSL

@@ -59,6 +59,7 @@ public class Chapter6_1 : MonoBehaviour
 
     //视锥体剔除优化
     [SerializeField] private bool useFrustumCulling = true;
+    [SerializeField] private bool useClipSpace = true;
     ComputeBuffer clumpsRawBuffer;
     Vector3 grassBoundsMin;
     Vector3 grassBoundsMax;
@@ -82,6 +83,8 @@ public class Chapter6_1 : MonoBehaviour
 
         argsArray[0] = mesh.GetIndexCount(0);
         argsArray[1] = (uint)grassCount;
+        argsBuffer  = new ComputeBuffer(1,5*sizeof(uint),ComputeBufferType.IndirectArguments);
+        argsBuffer.SetData(argsArray);
 
         clumpsArray = new GrassClump[grassCount];
     }
@@ -91,9 +94,6 @@ public class Chapter6_1 : MonoBehaviour
         clumpsBuffer = new ComputeBuffer(grassCount,sizeof(float)*10);
         clumpsBuffer.SetData(clumpsArray);//此时Buffer为空
         cs.SetBuffer(kernelLeanGrass,"clumpsBuffer",clumpsBuffer);
-
-        argsBuffer  = new ComputeBuffer(1,5*sizeof(uint),ComputeBufferType.IndirectArguments);
-        argsBuffer.SetData(argsArray);
 
         cs.DisableKeyword("UseFrustumCulling");
     }
@@ -156,10 +156,10 @@ public class Chapter6_1 : MonoBehaviour
         Vector3 farCenterPoint = transform.position + transform.forward*dist;
 
         Vector3[] points = new Vector3[4];
-        points[0] = farCenterPoint - up - right;
-        points[1] = farCenterPoint - up + right;
-        points[2] = farCenterPoint + up - right;
-        points[3] = farCenterPoint + up + right;
+        points[0] = farCenterPoint - up - right;//左下
+        points[1] = farCenterPoint - up + right;//右下
+        points[2] = farCenterPoint + up - right;//左上
+        points[3] = farCenterPoint + up + right;//右上
         return points;
     }
 
@@ -171,6 +171,7 @@ public class Chapter6_1 : MonoBehaviour
         Vector3 cameraPosition = transform.position;
         Vector3[] points = GetCameraFarClipPlanePoint(cam);
 
+        //传的点我们以顺时针传
         planes[0] = GetPlane(cameraPosition,points[0],points[2]);
         planes[1] = GetPlane(cameraPosition,points[2],points[3]);
         planes[2] = GetPlane(cameraPosition,points[3],points[1]);
@@ -232,14 +233,44 @@ public class Chapter6_1 : MonoBehaviour
     private void Update()
     {
         UpdateMaterialParameters();
-        cs.Dispatch(kernelLeanGrass,groupSizeX,1,1);
 
         if(useFrustumCulling)
         {
-            Vector4[] planes = GetFrustumPlane(Camera.main);
-            cs.SetVectorArray("planes",planes);
+            //每次更新数据的时候，需要使用SetCounterValue把 clumpsBuffer 这个 GPU 缓冲区的“计数器”重置为 0
+            clumpsBuffer.SetCounterValue(0);
+            cs.SetBuffer(kernelLeanGrass,"clumpsBuffer",clumpsBuffer);
+            if(!useClipSpace)
+            {
+                //方法一：计算每个instance物体包围盒的顶点是否在视锥体内，计算均在世界空间下进行
+                Vector4[] planes = GetFrustumPlane(Camera.main);
+                cs.SetVectorArray("planes",planes);
+                cs.DisableKeyword("UseClipSpace");
+            }
+            else
+            {
+                //方法二：计算AABB的每个顶点在裁剪空间下的齐次坐标
+                //如果有一个点(x,y,z)在世界空间中，变换到裁剪空间是(x',y',z')
+                //又因为你裁剪空间的视锥体变成一个边长为1的立方体，所以
+                //-1<x'<1&&-1<y<1&&-1<z<1或者-w<x'<w&&-w<y<w&&-w<z<w
+                Matrix4x4 viewMatrix = Camera.main.worldToCameraMatrix;//世界空间到相机空间
+                //获取相机的投影矩阵 (Projection Matrix: 相机空间 -> 裁剪空间)
+                //注意：必须使用 GL.GetGPUProjectionMatrix 处理不同平台（DirectX/OpenGL/Vulkan）的 API 差异
+                Matrix4x4 projMatrix = GL.GetGPUProjectionMatrix(Camera.main.projectionMatrix, false);
+                Matrix4x4 vp = projMatrix*viewMatrix;
+
+                cs.SetMatrix("vp",vp);
+                cs.EnableKeyword("UseClipSpace");
+            }
         }
-        
+        cs.Dispatch(kernelLeanGrass,groupSizeX,1,1);
+        //此时会有草的残余
+        //所以用我们要算实际渲染的草的个数，利用CopyCount(从哪个 Buffer 取数量，把数量放到哪个Buffer,放到目标 Buffer 的第几个字节)
+        //sizeof(uint)=4,刚好是对应grassCount的那个位置
+        if(useFrustumCulling)
+        {
+            ComputeBuffer.CopyCount(clumpsBuffer,argsBuffer,sizeof(uint));  
+        } 
+
         Graphics.DrawMeshInstancedIndirect(mesh,0,mat,bounds,argsBuffer);
     }
 
