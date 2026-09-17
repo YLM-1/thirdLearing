@@ -9,6 +9,7 @@ public class Chapter2_1 : MonoBehaviour
 
     public Renderer renderer;
     public RenderTexture outputTexture;
+    [SerializeField] private Vector2 velocity;
 
     int circlesHandle;
     int clearHandle;
@@ -34,6 +35,7 @@ public class Chapter2_1 : MonoBehaviour
         circlesHandle = shader.FindKernel("Circles");
         shader.SetInt("texResolution", texResolution);
         shader.SetTexture(circlesHandle, "Result", outputTexture);
+        shader.SetVector("velocity",velocity);
 
         clearHandle = shader.FindKernel("Clear");
         shader.SetTexture(clearHandle, "Result", outputTexture);

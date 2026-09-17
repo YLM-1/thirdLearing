@@ -8,6 +8,7 @@ shared RWTexture2D<float4> Result;
 
 float time;
 int texResolution;
+float2 velocity;
 
 // range: 0-1
 float random(float value, float seed = 0.546)
@@ -33,9 +34,9 @@ void drawCircle(int2 centre, int radius)
 {
     int x = 0;
     int y = radius;
-    int d = 1 - radius;
+    int d = 1 - radius; //d = 1 - radius -1/4摒弃掉0.25便于计算，d只是用于判断正负
 
-    while (x < y)
+    while (x<=y)
     {
         if (d < 0)
             d += 2 * x + 3;
@@ -44,7 +45,6 @@ void drawCircle(int2 centre, int radius)
             d += 2 * (x - y) + 5; 
             y--;
         }
-
         circlePlot8(x, y, centre);
         circlePlot8(y, x, centre);
         circlePlot8(x, -y, centre);
@@ -53,7 +53,6 @@ void drawCircle(int2 centre, int radius)
         circlePlot8(-y, -x, centre);
         circlePlot8(-x, y, centre);
         circlePlot8(-y, x, centre);
-
         x++;
     }
 }
@@ -61,9 +60,7 @@ void drawCircle(int2 centre, int radius)
 [numthreads(5, 1, 1)]
 void Circles (uint3 id : SV_DispatchThreadID)
 {
-    // TODO: insert actual code here!
-    //int2 centre = texResolution >> 1;
-    int2 centre = int2(random2((float)id.x + time) * texResolution);
+    int2 centre = int2(random2((float)id.x) * texResolution)+time*velocity;
     int radius = (int)(random((float)id.x) * 30);
     drawCircle(centre, radius);
 }

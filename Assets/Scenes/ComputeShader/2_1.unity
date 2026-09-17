@@ -292,12 +292,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 84013c794f7bb0c4b962619ec957d14a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  shader: {fileID: 7200000, guid: a4fa902e164341b468f567f615c37922, type: 3}
-  texResolution: 512
-  outputTexture: {fileID: 0}
-  renderer: {fileID: 0}
-  circlesHandle: 0
-  clearHandle: 0
 --- !u!64 &980549531
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -401,6 +395,7 @@ MonoBehaviour:
   texResolution: 512
   renderer: {fileID: 0}
   outputTexture: {fileID: 0}
+  velocity: {x: 10, y: 15}
 --- !u!1 &2136478924
 GameObject:
   m_ObjectHideFlags: 0

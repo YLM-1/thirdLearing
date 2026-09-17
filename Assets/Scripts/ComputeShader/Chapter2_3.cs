@@ -27,7 +27,8 @@ public class Chapter2_3 : MonoBehaviour
 
         uint threadGroupSizeX;//寻找x轴的线程一组的数
         shader.GetKernelThreadGroupSizes(kernelHandle,out threadGroupSizeX,out _,out _);
-        groupSizeX = (int)((teapotCount+threadGroupSizeX-1)/threadGroupSizeX);
+        //groupSizeX = (int)((teapotCount+threadGroupSizeX-1)/threadGroupSizeX);
+        groupSizeX = Mathf.CeilToInt((float)teapotCount/threadGroupSizeX);
         
         output = new Vector3[teapotCount];
 

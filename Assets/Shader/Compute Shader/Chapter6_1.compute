@@ -1,0 +1,95 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel LeanGrass
+
+#define PI 3.14159266369
+#include "noiseSimplex.cginc"
+#pragma multi_compile _ UseFrustumCulling
+
+struct GrassClump
+{
+    float3 position;
+    float lean;
+    float noise;
+    float trample;
+    float4 quaternion;
+};
+
+float windDirection;
+float windScale;
+float windSpeed;
+
+float leanMax;
+float time;
+
+float3 tramplePos;
+float trampleRadius;
+
+#if defined(UseFrustumCulling)
+    StructuredBuffer<GrassClump> clumpsRawBuffer;
+    // 使用 AppendStructuredBuffer 来作为compute shader的输出，我们可以用Append方法来添加需要输出的数据
+    AppendStructuredBuffer<GrassClump> clumpsBuffer;
+
+    float3 grassBoundsMin;
+    float3 grassBoundsMax;
+    int grassCount;
+
+    float4 planes[6];
+#else 
+    RWStructuredBuffer<GrassClump> clumpsBuffer;
+#endif         
+
+float4 mapVector(float3 v0,float3 v1)
+{
+    v0 = normalize(v0);
+    v1 = normalize(v1);
+    float3 v = normalize(v0+v1);
+
+    float4 q = 0;
+    q.w = dot(v,v1);
+    q.xyz = cross(v,v1);
+    return q;
+}
+
+[numthreads(128,1,1)]
+void LeanGrass (uint3 id : SV_DispatchThreadID)
+{
+    #if defined(UseFrustumCulling)
+        if(id.x>grassCount)
+           return;
+        GrassClump clumps = clumpsRawBuffer[id.x];
+    #else
+        GrassClump clumps = clumpsBuffer[id.x];
+    #endif    
+
+   //草的计算
+   float theta = windDirection*PI/180;
+   //关于y轴旋转
+   float2 wind = float2(cos(theta),sin(theta));
+   float2 offset = (clumps.position.xz+time*windSpeed*wind)*windScale;
+   float noise = perlin(offset.x,offset.y)*2-1;
+   //clumps.lean = leanMax*clumps.noise;
+   clumps.lean = noise * leanMax * clumps.noise;
+
+   //角色和草地互动
+   float3 relativePosition = clumps.position - tramplePos;
+   relativePosition.y=0;
+   float dist = length(relativePosition);
+
+   // 当角色和一颗草的距离小于阈值的时候
+   // 需要计算这颗草的弯曲程度，即压扁的效果
+   if(dist<trampleRadius)
+   {
+      clumps.trample = (trampleRadius - dist)/trampleRadius*0.6;
+      clumps.quaternion = mapVector(float3(0,1,0),relativePosition);
+   }
+   else
+   {
+       clumps.trample*=0.98;
+   }
+
+   #if defined(UseFrustumCulling)
+        clumpsBuffer.Append(clumps);
+   #else
+        clumpsBuffer[id.x] = clumps;
+   #endif
+}
