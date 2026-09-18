@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 public class Chapter6_1 : MonoBehaviour
 {
@@ -60,6 +62,11 @@ public class Chapter6_1 : MonoBehaviour
     //视锥体剔除优化
     [SerializeField] private bool useFrustumCulling = true;
     [SerializeField] private bool useClipSpace = true;
+    [SerializeField] private bool useHIZ;
+    [SerializeField] private Shader depthTextureShader;//生成自定义的mipmapLevel
+    [SerializeField] private RenderTexture depthTexture;
+    int depthTextureShaderID;
+    Material depthTextureMaterial;
     ComputeBuffer clumpsRawBuffer;
     Vector3 grassBoundsMin;
     Vector3 grassBoundsMax;
@@ -124,6 +131,97 @@ public class Chapter6_1 : MonoBehaviour
         mat.SetBuffer("clumpsBuffer",clumpsBuffer);
         mat.SetFloat("grassScale",grassScale);
         mat.SetFloat("leanMax",leanMax);
+    }
+    
+    private void InitHIZ()
+    {
+        Camera.main.GetUniversalAdditionalCameraData().requiresDepthTexture = true;
+        depthTextureShaderID = Shader.PropertyToID("_CameraDepthTexture");
+
+        if(depthTextureShader != null)
+            depthTextureMaterial = new Material(depthTextureShader);
+        else
+            Debug.LogWarning("Chapter6_1: depthTextureShader 未赋值,Hi-Z 降采样无法执行。", this);
+
+        if(depthTexture!=null)
+           depthTexture.Release();
+
+        //NextPowerOfTwo:返回大于或等于给定数值的、最小的 2 的幂,因为Hi-Z是建立在 2×2 逐级降采样的金字塔上的，尺寸必须是 2 的幂
+        int depthTextureSize = Mathf.NextPowerOfTwo(Mathf.Max(Screen.width,Screen.height));
+        depthTexture = new RenderTexture(depthTextureSize,depthTextureSize,0,RenderTextureFormat.RHalf);//RHalf只存r通道单精度
+        depthTexture.autoGenerateMips = false;//不自动生成 mipmap，因为自动生成的是颜色平均，不是深度最小/最大，不适合 Hi-Z；
+        depthTexture.useMipMap = true;
+        //不采用Bilinear,采用point最近邻采样,深度纹理存的是数值（距离值），不是颜色图片。
+        //深度贴图两个相邻像素，一个深度值 0.1，一个 0.9。
+        //Point：要么拿 0.1，要么拿 0.9，数值真实。
+        depthTexture.filterMode = FilterMode.Point;
+        depthTexture.Create();
+
+        //摄像机一般就是默认OpenGL
+        Matrix4x4 defaultProj = Camera.main.projectionMatrix;
+        //GL.GetGPUProjectionMatrix 用于将 Unity 的标准投影矩阵转换为符合当前渲染 API（DirectX、OpenGL、Vulkan 等）要求的 GPU 投影矩阵。
+        Matrix4x4 gpuProj = GL.GetGPUProjectionMatrix(defaultProj,false);
+        bool isOpenGL = defaultProj.Equals(gpuProj);
+        cs.SetBool("isOpenGL",isOpenGL);
+        cs.SetInt("depthTextureSize",depthTextureSize);
+    }
+
+    private void OnEnable()
+    {
+        //URP下不会调用 OnPostRender，改用 RenderPipelineManager 的相机渲染回调
+        RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
+    }
+
+    private void OnDisable()
+    {
+        RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+    }
+
+    private void OnEndCameraRendering(ScriptableRenderContext context,Camera cam)
+    {
+        //该事件对所有相机（场景相机、反射探针等）都会触发，这里只处理主相机
+        if(cam != Camera.main)
+            return;
+
+        if(!useHIZ || depthTexture==null)
+           return;
+
+        int w = depthTexture.width;
+        int mipmapLevel = 0;
+
+        RenderTexture preRenderTexture = null;
+
+        //16×16,所以后面computeShader中算mipmap需要log2(depthTextureSize)-4
+        while(w>8)
+        {
+            //后续的降采样需要 depthTextureMaterial，未赋值则只生成mip0
+            if(preRenderTexture!=null && depthTextureMaterial==null)
+               break;
+
+            RenderTexture currentRenderTexture = RenderTexture.GetTemporary(w,w,0,RenderTextureFormat.RHalf);
+            currentRenderTexture.filterMode = FilterMode.Point;
+
+            if(preRenderTexture==null)
+               //mipmapLevel = 0
+               Graphics.Blit(Shader.GetGlobalTexture(depthTextureShaderID),currentRenderTexture);
+            else
+               //将minpmapLevel[i]Blit到minpmapLevel[i+1]
+               Graphics.Blit(preRenderTexture,currentRenderTexture,depthTextureMaterial,0);
+
+            Graphics.CopyTexture(currentRenderTexture,0,0,depthTexture,0,mipmapLevel);
+
+            //上一级的临时RT已经用完，释放掉，避免显存泄漏
+            if(preRenderTexture!=null)
+               RenderTexture.ReleaseTemporary(preRenderTexture);
+
+            preRenderTexture = currentRenderTexture;
+
+            w/=2;
+            mipmapLevel++;  
+        }   
+
+        if(preRenderTexture!=null)
+           RenderTexture.ReleaseTemporary(preRenderTexture);
     }
 
     private Vector4 GetPlane(Vector3 point,Vector3 normal)
@@ -208,7 +306,7 @@ public class Chapter6_1 : MonoBehaviour
         cs.SetFloat("windDirection",windDirection);
         cs.SetFloat("windSpeed",windSpeed);
         cs.SetFloat("windScale",windScale);
-        cs.SetFloat("time",Time.time);
+        cs.SetFloat("time",Time.time);  
 
         cs.SetVector("tramplePos",character.position);
         cs.SetFloat("trampleRadius",trampleRadius);
@@ -227,6 +325,14 @@ public class Chapter6_1 : MonoBehaviour
         {
             InitDefaultBuffer();   
         }
+
+        if(useHIZ)
+        {
+            InitHIZ();
+            cs.EnableKeyword("UseHIZ");
+        }
+        else
+            cs.DisableKeyword("UseHIZ");
         InitMaterialParameters();
     }
 
@@ -260,6 +366,9 @@ public class Chapter6_1 : MonoBehaviour
 
                 cs.SetMatrix("vp",vp);
                 cs.EnableKeyword("UseClipSpace");
+
+                if(useHIZ)
+                  cs.SetTexture(kernelLeanGrass,"hizTexture",depthTexture);
             }
         }
         cs.Dispatch(kernelLeanGrass,groupSizeX,1,1);
@@ -279,5 +388,8 @@ public class Chapter6_1 : MonoBehaviour
         argsBuffer?.Release();
         clumpsBuffer?.Release();
         clumpsRawBuffer?.Release();
+
+        if(depthTexture!=null)
+           depthTexture?.Release();
     }
 }

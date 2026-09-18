@@ -5,6 +5,7 @@
 #include "noiseSimplex.cginc"
 #pragma multi_compile _ UseFrustumCulling
 #pragma multi_compile _ UseClipSpace
+#pragma multi_compile _ UseHIZ
 
 struct GrassClump
 {
@@ -59,6 +60,12 @@ float trampleRadius;
             && -clipPos.w <= clipPos.y && clipPos.y <= clipPos.w
             && -clipPos.w <= clipPos.z && clipPos.z <= clipPos.w;
     }
+
+    #if defined(UseHIZ)
+        bool isOpenGL;
+        int depthTextureSize;
+        Texture2D hizTexture;
+    #endif
 #else 
     RWStructuredBuffer<GrassClump> clumpsBuffer;
 #endif         
@@ -99,18 +106,91 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
 
         #if defined(UseClipSpace)
             bool isIn = false;
+
+            //新的aabb各个坐标的最大最小，用于构造新的aabb
+            float minX = 1, minY = 1, minZ = 1, maxX = -1, maxY = -1, maxZ = -1;
+            
             for(int i=0;i<8;i++)
             {
                 float4 clipPos = mul(vp,float4(boundsVerts[i],1));
-                if(IsInClipSpace(clipPos))
-                {
-                    isIn = true;
-                    break;
-                }
+
+                #if defined(UseHIZ)
+                    // 这里不同于之前的视锥体裁剪，这里需要知道每一个aabb顶点在ndc下的新的aabb
+                    if(!isIn&&IsInClipSpace(clipPos))
+                       isIn = true;
+
+                    //计算当前这颗草的aabb在ndc坐标系下的新的aabb
+                    float3 ndc = clipPos.xyz/clipPos.w;
+                    if(minX>ndc.x) minX = ndc.x;
+                    if(minY>ndc.y) minY = ndc.y;
+                    if(minZ>ndc.z) minZ = ndc.z;
+                    if(maxX<ndc.x) maxX = ndc.x;
+                    if(maxY<ndc.y) maxY = ndc.y;
+                    if(maxZ<ndc.z) maxZ = ndc.z;
+                #else     
+                    if(IsInClipSpace(clipPos))
+                    {
+                        isIn = true;
+                        break;
+                    }
+                #endif    
             }
             if(!isIn)
             return;   
-        
+            //接着视锥体裁剪，继续进行hiz遮挡剔除
+            #if defined(UseHIZ)
+                //将ndc的aabb坐标从-1,1转到0,1
+                float2 uvLeftBottom = float2(minX,minY)*0.5f+0.5f;
+                float2 uvRightTop = float2(maxX,maxY)*0.5f+0.5f;
+                float depth = maxZ;//DX
+
+                if(isOpenGL)
+                {
+                    depth = minZ;
+                    depth = depth*0.5+0.5;//openGL的z是-1,1，DX是0,1
+                }
+
+                //开始计算应该取那一层mipmap
+                uint mipmapLevel = (uint)clamp(log2(max(maxX-minX,maxY-minY)*0.5f*depthTextureSize),0,log2(depthTextureSize)-4);
+                //该层mipmapLevel的大小
+                uint size = depthTextureSize/(1<<mipmapLevel);
+
+                //该AABB的左下，右上在该mipmapLevel层级中的位置,size-1
+                uint2 pixelLeftBottom = uint2(clamp(uvLeftBottom.x*size,0,size-1),clamp(uvLeftBottom.y*size,0,size-1));
+                uint2 pixelRightTop = uint2(clamp(uvRightTop.x*size,0,size-1),clamp(uvRightTop.y*size,0,size-1));
+
+                //分别采样深度图中对应像素的深度值并做比较
+                float depthInTexture = hizTexture.mips[mipmapLevel][pixelLeftBottom].r;
+                if(isOpenGL)
+                {
+                    if(pixelLeftBottom.x<pixelRightTop.x&&pixelLeftBottom.y<pixelRightTop.y)
+                    {
+                        depthInTexture = max(max(depthInTexture,hizTexture.mips[mipmapLevel][pixelRightTop].r),
+                            max(hizTexture.mips[mipmapLevel][int2(pixelLeftBottom.x,pixelRightTop.y)].r,hizTexture.mips[mipmapLevel][int2(pixelRightTop.x,pixelLeftBottom.x)].r));
+                    }
+                    else if (pixelLeftBottom.x < pixelRightTop.x)
+                        depthInTexture = max(depthInTexture, hizTexture.mips[mipmapLevel][int2(pixelRightTop.x, pixelLeftBottom.y)].r);
+                    else if (pixelLeftBottom.y < pixelRightTop.y)
+                        depthInTexture = max(depthInTexture, hizTexture.mips[mipmapLevel][int2(pixelLeftBottom.x, pixelRightTop.y)].r);
+
+                    if (depthInTexture < depth)
+                        return;
+                }
+                else
+                {
+                    if (pixelLeftBottom.x < pixelRightTop.x && pixelLeftBottom.y < pixelRightTop.y) {
+                        depthInTexture = min(min(depthInTexture, hizTexture.mips[mipmapLevel][pixelRightTop].r),
+                            min(hizTexture.mips[mipmapLevel][int2(pixelLeftBottom.x, pixelRightTop.y)].r, hizTexture.mips[mipmapLevel][int2(pixelRightTop.x, pixelLeftBottom.y)].r));
+                    }
+                    else if (pixelLeftBottom.x < pixelRightTop.x)
+                        depthInTexture = min(depthInTexture, hizTexture.mips[mipmapLevel][int2(pixelRightTop.x, pixelLeftBottom.y)].r);
+                    else if (pixelLeftBottom.y < pixelRightTop.y)
+                        depthInTexture = min(depthInTexture, hizTexture.mips[mipmapLevel][int2(pixelLeftBottom.x, pixelRightTop.y)].r);
+
+                    if (depthInTexture > depth)
+                        return;
+                }
+            #endif    
         #else       
             //遍历所有的视锥体平面
             for(int i=0;i<6;i++)
