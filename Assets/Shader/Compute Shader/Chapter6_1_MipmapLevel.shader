@@ -9,12 +9,7 @@ Shader "Unlit/Chapter6_1_MipmapLevel"
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
-        LOD 100
-
-        Pass
-        {
-            HLSLPROGRAM
+        HLSLINCLUDE
             #pragma vertex vert
             #pragma fragment frag
 
@@ -32,6 +27,21 @@ Shader "Unlit/Chapter6_1_MipmapLevel"
                 float4 vertex : SV_POSITION;
             };
 
+            v2f vert (appdata v)
+            {
+                v2f o;
+                o.uv = v.uv;
+                o.vertex = TransformObjectToHClip(v.vertex);
+                return o;
+            }
+
+        ENDHLSL
+
+        Pass
+        {
+            Tags { "RenderType"="Opaque" }
+            LOD 100
+            HLSLPROGRAM
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
 
@@ -60,18 +70,24 @@ Shader "Unlit/Chapter6_1_MipmapLevel"
                 #endif
             }
 
-            v2f vert (appdata v)
-            {
-                v2f o;
-                o.uv = v.uv;
-                o.vertex = TransformObjectToHClip(v.vertex);
-                return o;
-            }
-
             float4 frag (v2f i) : SV_Target
             {
                 float depth = CalculatorMipmapDepth(i.uv);
                 return float4(depth,0,0,1);
+            }
+            ENDHLSL
+        }
+
+        Pass
+        {
+            HLSLPROGRAM
+            TEXTURE2D(_CameraDepthTexture);
+            SAMPLER(sampler_CameraDepthTexture);
+
+            float4 frag (v2f i) : SV_Target
+            {
+                float depth = SAMPLE_TEXTURE2D(_CameraDepthTexture,sampler_CameraDepthTexture ,i.uv).r;
+                return float4(depth, 0, 0, 1.0f);
             }
             ENDHLSL
         }

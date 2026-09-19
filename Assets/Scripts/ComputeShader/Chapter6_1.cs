@@ -71,6 +71,10 @@ public class Chapter6_1 : MonoBehaviour
     Vector3 grassBoundsMin;
     Vector3 grassBoundsMax;
 
+    //关于shadow
+    MaterialPropertyBlock grassBlock;
+
+
     private void InitComputeBuffer()
     {
         mesh = grassPerfab.GetComponentInChildren<MeshFilter>().sharedMesh;
@@ -131,6 +135,10 @@ public class Chapter6_1 : MonoBehaviour
         mat.SetBuffer("clumpsBuffer",clumpsBuffer);
         mat.SetFloat("grassScale",grassScale);
         mat.SetFloat("leanMax",leanMax);
+
+        grassBlock = new MaterialPropertyBlock();
+        grassBlock.SetBuffer("clumpsBuffer",clumpsBuffer);
+        grassBlock.SetFloat("grassScale",grassScale);
     }
     
     private void InitHIZ()
@@ -380,7 +388,8 @@ public class Chapter6_1 : MonoBehaviour
             ComputeBuffer.CopyCount(clumpsBuffer,argsBuffer,sizeof(uint));  
         } 
 
-        Graphics.DrawMeshInstancedIndirect(mesh,0,mat,bounds,argsBuffer);
+        // Graphics.DrawMeshInstancedIndirect(mesh,0,mat,bounds,argsBuffer);
+        Graphics.DrawMeshInstancedIndirect(mesh,0,mat,bounds,argsBuffer,0,grassBlock);
     }
 
     private void OnDestroy()

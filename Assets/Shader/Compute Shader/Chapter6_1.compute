@@ -235,7 +235,7 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
    }
    else
    {
-       clumps.trample*=0.98;
+       clumps.trample*=0.9;
    }
 
    #if defined(UseFrustumCulling)
