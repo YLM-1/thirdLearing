@@ -1,0 +1,222 @@
+#pragma kernel ComputeMeshTest
+#pragma kernel InitParticle
+#pragma kernel ComputeParticle
+#pragma kernel ComputeMesh
+#pragma kernel ComputeExternalForce
+
+//Step1.0:
+ByteAddressBuffer originalIndexBuffer;
+ByteAddressBuffer originalVertexBuffer;
+RWByteAddressBuffer vertexBuffer;
+
+float time;
+float deltaTime;
+
+//Step2.0
+struct Particle
+{
+    float3 position;
+    float3 predictPosition;
+    float3 velocity;
+};
+RWStructuredBuffer<Particle> particleBuffer;
+
+uint particleCount;
+uint triangleCount;
+float4x4 localToWorldMatrix;
+float4x4 worldToLocalMatrix;
+
+//Step3.0
+float3 gravity;
+
+//step1.0
+void LoadOriginalVertex(uint index,out float3 position,out float3 normal)
+{
+    uint pi = index*11*4;// index * (3[position.xyz] + 3[normal.xyz] + 3[tangent.xyz] + 2[uv.xy]) * 4[bytes]
+    uint ni = pi+3*4;
+
+    //Load3：负责把 12 字节的原始数据搬出来（拿到的是 uint3）
+    //asfloat(...)：负责重新解读这 12 字节（把 uint3 重新解读为 float3）。
+    position = asfloat(originalVertexBuffer.Load3(pi));
+    normal = asfloat(originalVertexBuffer.Load3(ni));
+}
+
+float3 DisplacePosition(float3 p)
+{
+    float3 disp = float3(
+        0.1 * (sin(1.3 * p.y + 4.1 * time) + sin(2.9 * p.z + 5.3 * time)),
+        0.1 * (sin(1.9 * p.z + 4.3 * time) + sin(3.1 * p.x + 5.9 * time)),
+        0.1 * (sin(2.3 * p.x + 4.7 * time) + sin(3.7 * p.y + 6.1 * time))
+        );
+    return p + disp;
+}
+
+void StoreVertex(uint index,float3 position,float3 normal)
+{
+    uint pi = index*11*4;
+    uint ni = pi + 3*4;
+
+    //Store3 是 RWByteAddressBuffer 的写入函数，表示“从 pi 字节偏移量开始，连续写入 12 个字节（3 个 32位字）的数据”。
+    vertexBuffer.Store3(pi,asuint(position));
+    vertexBuffer.Store3(ni,asuint(normal));
+}
+
+inline float4 QuatBetween2Vectors(float3 v0, float3 v1)
+{
+    if (length(v0) < 0.01 || length(v1) < 0.01)
+        return float4(0, 0, 0, 1);
+    else
+    {
+        float3 nv0 = normalize(v0);
+        float3 nv1 = normalize(v1);
+
+        float3 hv = normalize((nv0 + nv1) / 2);
+        return float4(cross(nv0, hv), dot(nv0, hv));
+    }
+}
+
+inline float3 QuatMul(float4 q, float3 v)
+{
+    float3 normal = dot(q.xyz, v) * q.xyz + q.w * q.w * v + 2.0 * q.w * cross(q.xyz, v) - cross(cross(q.xyz, v), q.xyz);
+    return normalize(normal);
+}
+
+Particle GenerateParticle(uint index)
+{
+    //拿到的是模型坐标系下的position和normal
+    //在 Unity（以及所有 3D 软件如 Blender/Maya）中，Mesh 文件（.fbx 或内置网格）里记录的 vertices 和 normals 默认都是相对于该模型自身中心点（Pivot）的相对坐标，即模型局部空间（Local Space）。
+    float3 localPosition,localNormal;
+    LoadOriginalVertex(index,localPosition,localNormal);
+
+    //转换到世界坐标系下
+    float3 worldPosition = mul(localToWorldMatrix,float4(localPosition,1)).xyz;
+
+    //初始化粒子属性
+    Particle p = particleBuffer[index];
+    p.position = worldPosition;
+    p.predictPosition = worldPosition;
+    p.velocity = 0;
+
+    return p;
+}
+
+//每次迭代均为一个三角形
+[numthreads(64,1,1)]
+void ComputeMeshTest (uint3 id : SV_DispatchThreadID)
+{
+    //读取顶点索引
+    uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);// id * 3[triangle vertices] * 4[bytes]
+
+    //读取原始Position和normal
+    float3 p0,n0;
+    LoadOriginalVertex(triIndex.x,p0,n0);
+
+    float3 p1,n1;
+    LoadOriginalVertex(triIndex.y,p1,n1);
+
+    float3 p2,n2;
+    LoadOriginalVertex(triIndex.z,p2,n2);
+
+    float3 np0 = DisplacePosition(p0);
+    float3 np1 = DisplacePosition(p1);
+    float3 np2 = DisplacePosition(p2);
+
+    // 计算出向量（0，0，0）指向p0 和 向量（0，0，0）指向p1之间的旋转，使用四元数表示
+    // 计算均在模型坐标空间系下，再使用这个旋转来旋转法线
+    float4 q0 = QuatBetween2Vectors(p0,np0);
+    float3 nn0 = QuatMul(q0, n0);
+
+    float4 q1 = QuatBetween2Vectors(p1,np1);
+    float3 nn1 = QuatMul(q1,n1);
+
+    float4 q2 = QuatBetween2Vectors(p2,np2);
+    float3 nn2 = QuatMul(q2,n2);
+
+    //保存新计算好的Position
+    StoreVertex(triIndex.x,np0,nn0);
+    StoreVertex(triIndex.y,np1,nn1);
+    StoreVertex(triIndex.z,np2,nn2);
+}
+
+[numthreads(64,1,1)]
+void InitParticle (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=triangleCount)
+       return;
+    
+    uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);
+
+    Particle p0 = GenerateParticle(triIndex.x);
+    Particle p1 = GenerateParticle(triIndex.y);
+    Particle p2 = GenerateParticle(triIndex.z);
+
+    particleBuffer[triIndex.x] = p0;
+    particleBuffer[triIndex.y] = p1;
+    particleBuffer[triIndex.z] = p2;
+}
+
+[numthreads(64,1,1)]
+void ComputeParticle (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=particleCount)
+      return;
+    
+    Particle p = particleBuffer[id.x];
+
+    //作为测试
+    // p.position +=float3(0,-1,0)*deltaTime;
+
+    p.velocity = (p.predictPosition - p.position)/deltaTime;
+    p.position = p.predictPosition;
+    p.predictPosition = 0;
+
+    particleBuffer[id.x] = p;
+}
+
+void ComputeVertex(uint index)
+{
+    Particle p = particleBuffer[index];
+
+    float3 worldPosition = p.position;
+    float3 localPosition = mul(worldToLocalMatrix,float4(worldPosition,1)).xyz;
+
+    float3 op,on;
+    LoadOriginalVertex(index,op,on);
+    float4 q = QuatBetween2Vectors(op,localPosition);
+
+    //计算normal
+    float3 newNormal = QuatMul(q,on);
+    float3 localNormal = mul(worldToLocalMatrix,float4(newNormal,1)).xyz;
+
+    StoreVertex(index,localPosition,localNormal);
+}
+
+[numthreads(64,1,1)]
+void ComputeMesh (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=triangleCount)
+      return;
+
+    uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);
+
+    ComputeVertex(triIndex.x);
+    ComputeVertex(triIndex.y);
+    ComputeVertex(triIndex.z);
+}
+
+[numthreads(64,1,1)]
+void ComputeExternalForce (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=particleCount)
+       return;
+    Particle p = particleBuffer[id.x];   
+    float3 position = p.position;
+    float3 velocity = p.velocity;
+
+    //处理重力
+    float3 v = velocity + gravity*deltaTime;
+    p.predictPosition = position + v*deltaTime;
+
+    particleBuffer[id.x] = p;
+}
+

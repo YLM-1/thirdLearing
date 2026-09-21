@@ -68,7 +68,9 @@ Shader "Unlit/CloudShadow"
 
             float4 frag (v2f i) : SV_Target
             {
+                //原始深度值 rawDepth 处于 NDC 空间（Normalized Device Coordinates，归一化设备坐标系）的 Z 轴空间（通常被称为 Raw Depth / 硬件深度）。非线性
                 float rawDepth = SampleSceneDepth(i.uv);
+                //转为线性0-1
                 float linear01Depth = Linear01Depth(rawDepth, _ZBufferParams);
                 float3 worldPos = _WorldSpaceCameraPos.xyz + i.ray * linear01Depth;
 

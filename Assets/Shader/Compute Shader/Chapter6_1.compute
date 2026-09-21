@@ -112,6 +112,7 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
             
             for(int i=0;i<8;i++)
             {
+                //从世界空间转换到裁剪空间
                 float4 clipPos = mul(vp,float4(boundsVerts[i],1));
 
                 #if defined(UseHIZ)
@@ -167,7 +168,7 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
                     {
                         depthInTexture = max(max(depthInTexture,hizTexture.mips[mipmapLevel][pixelRightTop].r),
                             max(hizTexture.mips[mipmapLevel][int2(pixelLeftBottom.x,pixelRightTop.y)].r,hizTexture.mips[mipmapLevel][int2(pixelRightTop.x,pixelLeftBottom.x)].r));
-                    }
+                    }   
                     else if (pixelLeftBottom.x < pixelRightTop.x)
                         depthInTexture = max(depthInTexture, hizTexture.mips[mipmapLevel][int2(pixelRightTop.x, pixelLeftBottom.y)].r);
                     else if (pixelLeftBottom.y < pixelRightTop.y)
