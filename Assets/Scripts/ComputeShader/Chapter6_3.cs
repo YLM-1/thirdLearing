@@ -4,6 +4,7 @@ using UnityEngine;
 using System.Linq;
 using UnityEngine.Rendering;
 using Unity.Mathematics;
+using System;
 
 public class Chapter6_3 : MonoBehaviour
 {
@@ -94,8 +95,8 @@ public class Chapter6_3 : MonoBehaviour
             Vector3 dz = mat.MultiplyVector(new Vector3(0,0,size.z));
 
             min = mat.MultiplyPoint(bc.center - size/2);
-            ax = new Vector4(dx.normalized.x,dx.normalized.x,dx.normalized.x,dx.magnitude);
-            ay = new Vector4(dy.normalized.x,dy.normalized.y,dz.normalized.z,dy.magnitude);
+            ax = new Vector4(dx.normalized.x,dx.normalized.y,dx.normalized.z,dx.magnitude);
+            ay = new Vector4(dy.normalized.x,dy.normalized.y,dy.normalized.z,dy.magnitude);
             az = new Vector4(dz.normalized.x,dz.normalized.y,dz.normalized.z,dz.magnitude);
        }
     }
@@ -103,10 +104,51 @@ public class Chapter6_3 : MonoBehaviour
     private ComputeBuffer boxColliderBuffer;
     private int boxColliderCount;
 
+    //胶囊体的碰撞体
+    public CapsuleCollider[] capsuleColliders;
+    struct CapsuleColliderDesc
+    {
+        public Vector3 origin;//世界坐标系下胶囊体底端半球球心的世界坐标
+        public float radius;
+        public Vector4 axis;//.w胶囊体中间圆柱段的高度/长度（即两端半球球心之间的距离，`height - 2 * radius`）
+        public CapsuleColliderDesc(CapsuleCollider cc)
+        {
+            origin = cc.center;
+            origin[cc.direction] = origin[cc.direction] - cc.height*0.5f+cc.radius;//计算得到的是点
+            Matrix4x4 mat = cc.transform.localToWorldMatrix;
+            origin = mat.MultiplyPoint3x4(origin);
+
+            float radiusScale = cc.transform.localScale.x;
+            float axisScale = cc.transform.localScale.y;
+
+            axis = Vector4.zero;
+
+            Vector3 dir = cc.transform.up;
+            if(cc.direction==0)
+            {
+                dir = cc.transform.right;
+                radiusScale = cc.transform.localScale.y;
+                axisScale = cc.transform.localScale.x;
+            }
+            else if(cc.direction==2)
+            {
+                dir = cc.transform.forward;
+                radiusScale = cc.transform.localScale.x;
+                axisScale = cc.transform.localScale.z;
+            }
+
+            radius = radiusScale*cc.radius;
+            axis = new Vector4(dir.normalized.x,dir.normalized.y,dir.normalized.z,(cc.height - 2 * cc.radius) * axisScale);
+        }
+    }
+    private CapsuleColliderDesc[] capsuleColliderDescs;
+    private ComputeBuffer capsuleColliderBuffer;
+    private int capsuleColliderCount;
+
     //使用这个数据来记录碰撞本身的信息
     struct CollisionInfo
     {
-        public Vector3 constrainPosition;
+        public Vector3 constrainPosition;//预测的位置
         public Vector3 velocity;
         public Vector3 normal;
     }
@@ -114,6 +156,30 @@ public class Chapter6_3 : MonoBehaviour
     
     int kernelInitCollisionConstraints;
     int kernelComputeCollisionConstraints;
+    
+    //Step4.1处理最终碰撞约束
+    [SerializeField] private float iteratorCount = 5;
+    int kernelComputeFinalConstraints;
+
+    //Srep5.1:距离约束
+    struct EdgeInfo
+    {
+        public uint index0;
+        public uint index1;
+        public float restLength;
+        public EdgeInfo(uint i0,uint i1)
+        {
+            index0 = i0;
+            index1 = i1;
+            restLength = 0;
+        }
+    };
+    int edgeInfoCount;
+    private ComputeBuffer edgeInfoBuffer;
+    private int kernelInitDistanceConstraints;
+    private int kernelComputeDistanceConstraints;
+    [SerializeField] private float compressStiffness=1;//压缩系数
+    [SerializeField] private float strengthStiffness=1;//拉升系数
 
     private void Start()
     {
@@ -129,6 +195,10 @@ public class Chapter6_3 : MonoBehaviour
         InitExternalForce();
         //初始化碰撞约束
         InitCollisionConstrain();
+        //初始化距离约束
+        InitDistanceConstraint();
+        //初始化最终碰撞约束
+        InitComputeFinalConstraints();
         //定义布料的粒子的粒子结构
         InitComputeParticles();
     }
@@ -287,10 +357,19 @@ public class Chapter6_3 : MonoBehaviour
 
             //开始布料解算
             DispatchThreads(kernelComputeExternalForce,particleCount);
-            //使用粒子来解算，迭代次数是粒子的数量，即模型的顶点数
-            DispatchThreads(kernelComputeParticle,particleCount);
             //在计算碰撞约束相关
             DispatchThreads(kernelComputeCollisionConstraints,particleCount);
+        
+            for(int j=0;j<iteratorCount;j++)
+            {
+                cs.SetFloat("iteratorIndex",j);
+                //5.1计算距离约束
+                DispatchThreads(kernelComputeDistanceConstraints,edgeInfoCount);
+                //计算最终碰撞约束
+                DispatchThreads(kernelComputeFinalConstraints,particleCount);
+            }
+            //使用粒子来解算，迭代次数是粒子的数量，即模型的顶点数
+            DispatchThreads(kernelComputeParticle,particleCount);
             //结束布料解算
             //粒子解算完之后，迭代次数是三角形的数量
             DispatchThreads(kernelComputeMesh,triangleCount);
@@ -346,21 +425,96 @@ public class Chapter6_3 : MonoBehaviour
         else
           boxColliderBuffer = new ComputeBuffer(1,sizeof(float)*15);
 
+        capsuleColliderCount = capsuleColliders.Length;
+        capsuleColliderDescs = new CapsuleColliderDesc[capsuleColliderCount];
+        if(capsuleColliderCount>0)
+        {
+            for(int i=0;i<capsuleColliderCount;i++)
+                capsuleColliderDescs[i] = new CapsuleColliderDesc(capsuleColliders[i]);
+            capsuleColliderBuffer = new ComputeBuffer(capsuleColliderCount,sizeof(float)*8);
+            capsuleColliderBuffer.SetData(capsuleColliderDescs);
+        }
+        else
+           capsuleColliderBuffer = new ComputeBuffer(1,sizeof(float)*8);
+
         cs.SetBuffer(kernelComputeCollisionConstraints,"particleBuffer",particleBuffer);
         cs.SetBuffer(kernelComputeCollisionConstraints,"collisionInfoBuffer",collisionInfoBuffer);
         cs.SetBuffer(kernelComputeCollisionConstraints,"sphereColliderBuffer",sphereColliderBuffer);
         cs.SetBuffer(kernelComputeCollisionConstraints,"boxColliderBuffer",boxColliderBuffer);
+        cs.SetBuffer(kernelComputeCollisionConstraints,"capsuleColliderBuffer",capsuleColliderBuffer);
 
         cs.SetInt("sphereColliderCount",sphereColliderCount);
         cs.SetInt("boxColliderCount",boxColliderCount);
+        cs.SetInt("capsuleColliderCount",capsuleColliderCount);
     }
 
+    //Step5.1:计算距离约束
+    private uint GetEdgeHash(uint index0,uint index1)
+    {
+        if(index0<index1)
+        {
+            return index0<<16|index1;
+        }
+        else
+        {
+            return index1<<10|index0;
+        }
+    }
+    private void InitDistanceConstraint()
+    {
+        //取得Edfe由于需要考虑是否重复处理同一边的问题，目前放在CPU
+        Dictionary<uint,EdgeInfo> di = new Dictionary<uint, EdgeInfo>();
+
+        //遍历所有三角面
+        for(int i=0;i<triangleCount;i++)
+        {
+            uint index0 = (uint)originalMesh.triangles[i*3];
+            uint index1 = (uint)originalMesh.triangles[i*3+1];
+            uint index2 = (uint)originalMesh.triangles[i*3+2];
+
+            uint edgeHash0 = GetEdgeHash(index0,index1);
+            di.TryAdd(edgeHash0,new EdgeInfo(index0,index1));
+
+            uint edgeHash1 = GetEdgeHash(index1,index2);
+            di.TryAdd(edgeHash1,new EdgeInfo(index1,index2));
+
+            uint edgeHash2 = GetEdgeHash(index2,index0);
+            di.TryAdd(edgeHash2,new EdgeInfo(index2,index0));
+        }
+
+        //把字典 di 中保存的所有边（EdgeInfo）的值全部拿出来，打包组合成一个 C# 的数组（EdgeInfo[]）。
+        EdgeInfo[] arr = di.Values.ToArray();
+        edgeInfoCount = arr.Length;
+        edgeInfoBuffer = new ComputeBuffer(edgeInfoCount,sizeof(float)*1+sizeof(uint)*2);
+        edgeInfoBuffer.SetData(arr);
+
+        kernelInitDistanceConstraints = cs.FindKernel("InitDistanceConstraints");
+        cs.SetBuffer(kernelInitDistanceConstraints,"edgeInfoBuffer",edgeInfoBuffer);
+        cs.SetBuffer(kernelInitDistanceConstraints,"particleBuffer",particleBuffer);
+        cs.SetInt("edgeInfoCount",edgeInfoCount);
+        DispatchThreads(kernelInitDistanceConstraints,edgeInfoCount);
+
+        kernelComputeDistanceConstraints = cs.FindKernel("ComputeDistanceConstraints");
+        cs.SetBuffer(kernelComputeDistanceConstraints,"edgeInfoBuffer",edgeInfoBuffer);
+        cs.SetBuffer(kernelComputeDistanceConstraints,"particleBuffer",particleBuffer);
+    }
+
+    //Strp4.1:计算最终碰撞约束相关
+    private void InitComputeFinalConstraints()
+    {
+        kernelComputeFinalConstraints = cs.FindKernel("ComputeFinalConstraints");
+        cs.SetBuffer(kernelComputeFinalConstraints,"particleBuffer",particleBuffer);
+        cs.SetBuffer(kernelComputeFinalConstraints,"collisionInfoBuffer",collisionInfoBuffer);
+    }
     private void UpdateParameters()
     {
         cs.SetVector("gravity",gravity);
         cs.SetVector("wind",wind);
         cs.SetFloat("density",density);
         cs.SetFloat("dampingForec",dampingForec);
+        cs.SetFloat("iteratorCount",iteratorCount);
+        cs.SetFloat("strengthStiffness",strengthStiffness);
+        cs.SetFloat("compressStiffness",compressStiffness);
     }
 
     private void OnValidate()

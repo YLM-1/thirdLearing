@@ -1,9 +1,16 @@
 #pragma kernel ComputeMeshTest
+
 #pragma kernel InitParticle
 #pragma kernel ComputeParticle
 #pragma kernel ComputeMesh
+
 #pragma kernel ComputeExternalForce
+
+#pragma kernel InitDistanceConstraints
 #pragma kernel InitCollisionConstraints
+#pragma kernel ComputeFinalConstraints
+
+#pragma kernel ComputeDistanceConstraints
 #pragma kernel ComputeCollisionConstraints
 
 //Step1.0:
@@ -59,16 +66,42 @@ struct BoxColliderDesc
     float4 ay;
     float4 az;
 };
+
+struct CapsuleColliderDesc
+{
+    float3 origin;//世界坐标系下胶囊体底端半球球心的世界坐标
+    float radius;
+    float4 axis;//胶囊体中间圆柱段的高度/长度（即两端半球球心之间的距离，`height - 2 * radius`）
+};
+
 RWStructuredBuffer<CollisionInfo> collisionInfoBuffer;
 StructuredBuffer<SphereColliderDesc> sphereColliderBuffer;
 StructuredBuffer<BoxColliderDesc> boxColliderBuffer;
+StructuredBuffer<CapsuleColliderDesc> capsuleColliderBuffer;
 
 int sphereColliderCount;
 int boxColliderCount;
+int capsuleColliderCount;
+
+float iteratorCount;
+float iteratorIndex;
 // 作为枚举的uint一定要声明为静态变量
 const static int ConstraintsTypeDistance = 0;
 const static int ConstraintsTypePin = 1;
 const static int ConstraintsTypeCollision = 2;
+
+
+//Step5.1
+struct EdgeInfo
+{
+    uint index0;
+    uint index1;
+    float restLength;
+};
+RWStructuredBuffer<EdgeInfo> edgeInfoBuffer;
+int edgeInfoCount;
+float strengthStiffness;
+float compressStiffness;
 
 //step1.0
 void LoadOriginalVertex(uint index,out float3 position,out float3 normal)
@@ -226,9 +259,14 @@ void ComputeParticle (uint3 id : SV_DispatchThreadID)
     //作为测试
     // p.position +=float3(0,-1,0)*deltaTime;
 
-    p.velocity = (p.predictPosition - p.position)/deltaTime;
+    //处理碰撞约束
+    if((p.constraintsType & ConstraintsTypeCollision) == ConstraintsTypeCollision)
+       p.velocity = 0;
+    else
+       p.velocity = (p.predictPosition - p.position)/deltaTime;  
+       
     p.position = p.predictPosition;
-    p.predictPosition = 0;
+    p.predictPosition = 0;   
 
     particleBuffer[id.x] = p;
 }
@@ -310,10 +348,8 @@ struct ConcatInfo
 
 
 // 计算粒子是否和碰撞体碰撞，如果碰撞，则得到碰撞信息 ConcatInfo
-bool GetClosesfacePoint(float3 pos,SphereColliderDesc sphere,ConcatInfo concatInfo)
+bool GetClosestSurfacePoint(float3 pos,SphereColliderDesc sphere,out ConcatInfo concatInfo)
 {
-    concatInfo.position = 0;
-    concatInfo.normal = 0;
     //计算粒子是否和sphereCollider碰撞
     float3 c2p = pos - sphere.center;
     float d2 = dot(c2p,c2p);
@@ -332,19 +368,19 @@ bool GetClosesfacePoint(float3 pos,SphereColliderDesc sphere,ConcatInfo concatIn
         return false;
 }
 
-bool GetClosesfacePoint(float3 pos,BoxColliderDesc box,ConcatInfo concatInfo)
+bool GetClosestSurfacePoint(float3 pos,BoxColliderDesc box,out ConcatInfo concatInfo)
 {
     //计算粒子是否和BoxCollider碰撞
     // 1. 首先得到从立方体最小点指向当前粒子位置的向量
     float3 m2p = pos - box.min;
     // 2. 得到 该向量在立方体三个边轴上的投影
     float3 projOnAxis = float3(
-        dot(m2p.x,box.ax),
-        dot(m2p.y,box.ay),
-        dot(m2p.z,box.az)
+        dot(m2p,box.ax.xyz),
+        dot(m2p,box.ay.xyz),
+        dot(m2p,box.az.xyz)
     );
     // 3. 得到立方体三个边轴的长度
-    float3 axisLength = float3(box.ax.w,box.ay.z,box.az.w);
+    float3 axisLength = float3(box.ax.w,box.ay.w,box.az.w);
     // 4. 判断投影在边轴更靠近左边界还是右边届（0：左边界，1：右边界）
     int3 side = step(axisLength*0.5f,projOnAxis);
     // 5. 计算投影和边轴的距离，并用正负区分是在正轴还是负轴
@@ -359,27 +395,89 @@ bool GetClosesfacePoint(float3 pos,BoxColliderDesc box,ConcatInfo concatInfo)
         //从x轴开始赋初值并判断
         float dst = signeDist.x;
         float4 axis = box.ax;
-        int sideFlag = side.y;
+        int sideFlag = side.x;
         float axisIndex = 0;
 
         if(signeDist.y<dst)
         {
-            float dst = signeDist.y;
-            float3 axis = box.ay;
-            int sideFlag = side.y;
-            float axisIndex = 1;
+            dst = signeDist.y;
+            axis = box.ay;
+            sideFlag = side.y;
+            axisIndex = 1;
         }
-        if(signeDist.z<signeDist.y)
+        if(signeDist.z<dst)
         {
-            float dist = signeDist.z;
-            float3 axis = box.az;
-            int sideFlag = side.z;
-            float axisIndex = 2;
+            dst = signeDist.z;
+            axis = box.az;
+            sideFlag = side.z;
+            axisIndex = 2;
         }
+
         concatInfo.normal = sideFlag>0?axis.xyz:-axis.xyz;
-        float3 offset = projOnAxis[axisIndex] - sideFlag * axis.w;
-        concatInfo.position = pos - axis*offset;
+        float offset = projOnAxis[axisIndex] - sideFlag * axis.w;
+        concatInfo.position = pos - axis.xyz*offset;
         return true;
+    }
+    else
+        return false;
+}
+
+bool GetClosestSurfacePoint(float3 pos,CapsuleColliderDesc capsule,out ConcatInfo concatInfo)
+{
+    float radius = capsule.radius;
+    float4 axis = capsule.axis;
+    float3 origin = capsule.origin;
+    float3 c2p = pos - origin;
+
+    float projOnAxis = dot(c2p,axis.xyz);
+
+    if(projOnAxis<-radius||projOnAxis>axis.w+radius)
+      return false;
+    
+    float r2 = radius*radius;
+
+    if(projOnAxis>=0&&projOnAxis<=axis.w)
+    {
+        // 如果轴上的投影在圆柱体之间
+		// 计算粒子的位置到轴的垂直距离的平方
+        float dist = dot(c2p,c2p) - projOnAxis*projOnAxis;
+        if(dist<r2)
+        {
+            float3 q = axis.xyz*projOnAxis;
+            concatInfo.normal = normalize(c2p-q);
+            concatInfo.position = origin + q + concatInfo.normal*radius;
+            return true;
+        }
+        else
+            return false;
+    }
+
+    if(projOnAxis>=-radius&&projOnAxis<0)
+    {
+        float dist = dot(c2p,c2p);
+        if(dist<r2)
+        {
+            concatInfo.normal = normalize(c2p);
+            concatInfo.position = origin + concatInfo.normal*radius;
+            return true;
+        }
+        else 
+           return false;
+    }
+
+    if(projOnAxis>axis.w&&projOnAxis<axis.w+radius)
+    {
+        //轴上投影处于另一头附近
+        float3 c = axis.xyz * axis.w;
+        c2p = c2p - c;
+        if(dot(c2p, c2p) < r2)
+		{
+            concatInfo.normal = normalize(c2p);
+            concatInfo.position = origin + c + radius * concatInfo.normal;
+            return true;
+        }
+		else
+            return false;
     }
     return false;
 }
@@ -387,8 +485,6 @@ bool GetClosesfacePoint(float3 pos,BoxColliderDesc box,ConcatInfo concatInfo)
 // 如果粒子和碰撞体产生碰撞
 void EnableCollisionConstraints(int index,ConcatInfo concatInfo)
 {
-    concatInfo.position = 0;
-    concatInfo.normal = 0;
     //粒子更新
     Particle p = particleBuffer[index];
 
@@ -426,7 +522,7 @@ void ComputeCollisionConstraints (uint3 id : SV_DispatchThreadID)
         SphereColliderDesc sphere = sphereColliderBuffer[i];
         ConcatInfo concatInfo;
         // 解算过程中都使用 predictPosition
-        if(GetClosesfacePoint(p.predictPosition,sphere,concatInfo))
+        if(GetClosestSurfacePoint(p.predictPosition,sphere,concatInfo))
         {
             EnableCollisionConstraints(id.x,concatInfo);
             return;
@@ -434,16 +530,117 @@ void ComputeCollisionConstraints (uint3 id : SV_DispatchThreadID)
     }
 
     // 再判断粒子和所有的立方体碰撞体是否有碰撞
-    for(int i = 0;i<boxColliderCount;i++)
+    for(int j = 0;j<boxColliderCount;j++)
     {
-        BoxColliderDesc box = boxColliderBuffer[i];
+        BoxColliderDesc box = boxColliderBuffer[j];
         ConcatInfo concatInfo;
-        if(GetClosesfacePoint(p.predictPosition,box,concatInfo))
+        if(GetClosestSurfacePoint(p.predictPosition,box,concatInfo))
         {
+            EnableCollisionConstraints(id.x,concatInfo);
+            return;
+        }
+    }
+
+    //最后判断是否和胶囊体发生碰撞
+    for(int k = 0;k<capsuleColliderCount;k++)
+    {
+        CapsuleColliderDesc capsule = capsuleColliderBuffer[k];
+        ConcatInfo concatInfo;
+        if(GetClosestSurfacePoint(p.predictPosition,capsule,concatInfo))
+        {
+            EnableCollisionConstraints(id.x,concatInfo);
             return;
         }
     }
 
     particleBuffer[id.x] = DisableCollisionConstraints(p);
 }
+
+[numthreads(64,1,1)]
+void ComputeFinalConstraints (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=particleCount)
+       return;
+    Particle p=particleBuffer[id.x];
+    
+    //处理碰撞相关计算
+    int constraintsType = p.constraintsType;
+    if((constraintsType & ConstraintsTypeCollision) == ConstraintsTypeCollision)
+    {
+        float3 position = p.position;
+
+        CollisionInfo collisionInfo = collisionInfoBuffer[id.x];
+        float3 deltaP = collisionInfo.constrainPosition - position;
+        position+=deltaP*(iteratorIndex/iteratorCount);
+
+        p.predictPosition = position;
+        particleBuffer[id.x] = p;
+        return;
+    }
+}
+
+[numthreads(64,1,1)]
+void InitDistanceConstraints(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=edgeInfoCount)
+       return;
+    EdgeInfo edgeInfo = edgeInfoBuffer[id.x];
+    uint index0 = edgeInfo.index0;
+    uint index1 = edgeInfo.index1;
+
+    float3 pos0 = particleBuffer[index0].position;
+    float3 pos1 = particleBuffer[index1].position;
+    
+    edgeInfo.restLength = length(pos0-pos1);
+    edgeInfoBuffer[id.x] = edgeInfo;
+}
+
+[numthreads(64,1,1)]
+void ComputeDistanceConstraints(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=edgeInfoCount)
+      return;
+    EdgeInfo edgeInfo = edgeInfoBuffer[id.x];
+    
+    uint index0 = edgeInfo.index0;
+    uint index1 = edgeInfo.index1;
+
+    Particle p0 = particleBuffer[index0];
+    Particle p1 = particleBuffer[index1];
+
+    // 牛顿-拉夫逊迭代法: https://matthias-research.github.io/pages/publications/posBasedDyn.pdf
+
+    float m0 = p0.mass;
+    float m1 = p1.mass;
+
+    // 两个粒子当前帧的位置得到的向量
+    float3 dist = p1.predictPosition-p0.predictPosition;
+    // 两个粒子当前帧的距离
+    float len = length(dist);
+    float3 normal = normalize(dist);
+
+    float err = len - edgeInfo.restLength;
+    float3 correct;
+
+    if(err<0)
+    {
+        // 如果当前两个粒子离得太近，则要拉远一些
+        correct = strengthStiffness*normal*err;
+    }
+    else
+    {
+        // 如果当前两个粒子离得太远，则要拉近一点
+        correct = compressStiffness*normal*err;
+    }
+    float di = 1.0f / (iteratorCount - iteratorIndex);
+    float totalMass = m0+m1;
+
+    // p0 的预测位置 += (纠正方向) * (偏差距离) * (瘦子质量比例) * 时间步长;
+    p0.predictPosition += correct*di*m1/totalMass*deltaTime;
+    // p1 的预测位置 -= (纠正方向) * (偏差距离) * (胖子质量比例) * 时间步长;
+    p1.predictPosition -= correct * di *m0 / totalMass * deltaTime;
+    particleBuffer[index0] = p0;
+    particleBuffer[index1] = p1;
+}
+
 
