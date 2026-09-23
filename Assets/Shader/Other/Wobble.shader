@@ -107,22 +107,46 @@ Shader "Unlit/Wobble"
                 return mul(m,vertex);
             }
 
+            // v2f vert (appdata v)
+            // {
+            //     v2f o;
+            //     o.normalWS = TransformObjectToWorldNormal(v.normal);
+
+            //     //将液体沿着法线内收，类似outline
+            //     float3 liquidPosWS = TransformObjectToWorld(v.vertex.xyz) - o.normalWS * _LiquidInset;
+            //     o.vertex = TransformWorldToHClip(liquidPosWS);
+            //     o.worldPos = liquidPosWS;
+
+            //     //对模型空间内顶点做旋转变换
+            //     v.vertex.yz=RotateAroundAxis(v.vertex.yz,_WobbleX);
+            //     v.vertex.xy=RotateAroundAxis(v.vertex.xy,_WobbleZ);
+            //     o.uv = v.uv;
+            //     float3 objectOrigin = UNITY_MATRIX_M._m03_m13_m23;
+            //     //相减得到相对物体的世界位置
+            //     float3 posWS = TransformObjectToWorld(v.vertex.xyz) - objectOrigin;
+            //     o.fill = posWS.y;
+            //     return o;
+            // }
+
             v2f vert (appdata v)
             {
                 v2f o;
-                o.normalWS = TransformObjectToWorldNormal(v.normal);
 
-                float3 liquidPosWS = TransformObjectToWorld(v.vertex.xyz) - o.normalWS * _LiquidInset;
-                o.vertex = TransformWorldToHClip(liquidPosWS);
-                o.worldPos = liquidPosWS;
+                //将液体沿着法线内收，类似outline
+                v.vertex.xyz = v.vertex.xyz - v.normal * _LiquidInset;
+                o.vertex = TransformObjectToHClip(v.vertex.xyz);
 
                 //对模型空间内顶点做旋转变换
-                v.vertex.yz=RotateAroundAxis(v.vertex.yz,_WobbleX);
-                v.vertex.xy=RotateAroundAxis(v.vertex.xy,_WobbleZ);
+                v.vertex.yz=RotateAroundAxis(v.vertex.yz,_WobbleX);//绕x轴
+                v.vertex.xy=RotateAroundAxis(v.vertex.xy,_WobbleZ);//绕z轴
+
+                o.worldPos = TransformObjectToWorld(v.vertex.xyz);
+
                 o.uv = v.uv;
                 float3 objectOrigin = UNITY_MATRIX_M._m03_m13_m23;
                 //相减得到相对物体的世界位置
-                float3 posWS = TransformObjectToWorld(v.vertex.xyz) - objectOrigin;
+                float3 posWS = o.worldPos - objectOrigin;
+                o.normalWS = TransformObjectToWorldNormal(v.normal);
                 o.fill = posWS.y;
                 return o;
             }

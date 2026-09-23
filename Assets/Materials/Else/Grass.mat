@@ -33,8 +33,8 @@ Material:
     - _Curve: 2
     - _Forward: 0.389
     - _ForwardRandom: 0.376
-    - _Height: 0.5
-    - _HeightRandom: 0.257
+    - _Height: 0.347
+    - _HeightRandom: 0.281
     - _Radius: 1.49
     - _RotationRandom: 0.598
     - _ShadowStrength: 0.5

@@ -74,6 +74,7 @@ Shader "Unlit/CloudShadow"
                 float linear01Depth = Linear01Depth(rawDepth, _ZBufferParams);
                 float3 worldPos = _WorldSpaceCameraPos.xyz + i.ray * linear01Depth;
 
+                //使用 worldPos.xz 来采样贴图，本质上是在做世界空间下的“正交垂直投影”（Orthographic Top-Down Projection）。
                 float2 worldUV = worldPos.xz*_Repeat;
                 float2 uv = worldUV+_Time.y*float2(_SpeedX,_SpeedY);
 

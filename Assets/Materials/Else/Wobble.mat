@@ -26,23 +26,23 @@ Material:
     m_Ints: []
     m_Floats:
     - _BottleRimIntensity: 16.3
-    - _BottleRimPower: 7.8
+    - _BottleRimPower: 5.6
     - _BottleSpecularIntensity: 28.9
     - _BottleSpecularPower: 44.7
-    - _FillAmount: 0.559
-    - _LiquidFoamHeight: 0.032
-    - _LiquidInset: 0.0144
-    - _LiquidRimIntensity: 39.6
-    - _LiquidRimPower: 6.8
-    - _SpecularIntensity: 1.8
-    - _SpecularPower: 79
+    - _FillAmount: 0.608
+    - _LiquidFoamHeight: 0.042
+    - _LiquidInset: 0.0109
+    - _LiquidRimIntensity: 42
+    - _LiquidRimPower: 7.5
+    - _SpecularIntensity: 3.9
+    - _SpecularPower: 58.9
     - _WobbleX: -8.4
     - _WobbleZ: 9.1
     m_Colors:
     - _BottleColor: {r: 1, g: 0.65609986, b: 0.40784308, a: 0.53333336}
-    - _LiquidColor: {r: 0, g: 0.6607187, b: 0.7924528, a: 0}
+    - _LiquidColor: {r: 0.13292582, g: 0.7703654, b: 0.899371, a: 0}
     - _LiquidFoam: {r: 1, g: 1, b: 1, a: 1}
-    - _LiquidFoamColor: {r: 0, g: 0.83168316, b: 1, a: 0}
+    - _LiquidFoamColor: {r: 0.42607093, g: 0.74635696, b: 0.8113208, a: 0}
     - _LiquidTop: {r: 1, g: 1, b: 1, a: 1}
-    - _LiquidTopColor: {r: 0.4353071, g: 0.81603056, b: 0.8930817, a: 0}
+    - _LiquidTopColor: {r: 0.19202155, g: 0.72631466, b: 0.836478, a: 0}
   m_BuildTextureStacks: []

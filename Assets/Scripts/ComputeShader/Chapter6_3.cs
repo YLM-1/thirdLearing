@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 using UnityEngine.Rendering;
+using Unity.Mathematics;
 
 public class Chapter6_3 : MonoBehaviour
 {
@@ -36,6 +37,9 @@ public class Chapter6_3 : MonoBehaviour
         public Vector3 position;
         public Vector3 predictPosition;
         public Vector3 velocity;
+        public Vector3 normal;
+        public float mass;
+        public int constraintsType;//用来记录该粒子是否和碰撞体有轴约束0:Distance距离约束,1:pin固定位置约束,2:Collosion碰撞约束
    }
    private ComputeBuffer particleBuffer;
    private int particleCount;
@@ -44,11 +48,76 @@ public class Chapter6_3 : MonoBehaviour
    private int kernelComputeMesh;
 
    //Step3；处理外力
-   [SerializeField] private Vector3 gravity = new Vector3(0,-1f,0);
-   private int kernelComputeExtrenalForce;
+   [SerializeField] private Vector3 gravity = new Vector3(0,1,0);//重力
+   [SerializeField] private Vector3 wind = new Vector3(1,3,4);//风力
+   [SerializeField] private float density = 1;//粒子密度，用来计算mass
+   [Range(0,0.2f)]
+   [SerializeField] private float dampingForec=0.1f; //阻力
+   private int kernelComputeExternalForce;
+
+   //Step4:碰撞约束
+   //球体的碰撞体
+   public SphereCollider[] sphereColliders;
+    struct SphereColliderDesc
+    {
+        public Vector3 center;  //世界坐标系下
+        public float radius;
+
+        public SphereColliderDesc(SphereCollider sc)
+        {
+            center = sc.transform.position + sc.center;
+            radius = sc.transform.localScale.x * sc.radius;
+        }
+    };
+    private SphereColliderDesc[] sphereColliderDescs;
+    private ComputeBuffer sphereColliderBuffer;
+    private int sphereColliderCount;
+
+    //立方体的碰撞体
+    public BoxCollider[] boxColliders;
+    struct BoxColliderDesc
+    {
+        public Vector3 min;
+        //xyz代表轴在世界空间下的朝向，w代表length
+        public Vector4 ax;
+        public Vector4 ay;
+        public Vector4 az;
+
+        public BoxColliderDesc(BoxCollider bc)
+        {
+            Matrix4x4 mat = bc.transform.localToWorldMatrix;
+            Vector3 size = bc.size;
+
+            //xyz为Normalized方向，w为长度
+            Vector3 dx = mat.MultiplyVector(new Vector3(size.x,0,0));//MultiplyVecto：只缩放和旋转
+            Vector3 dy = mat.MultiplyVector(new Vector3(0,size.y,0));
+            Vector3 dz = mat.MultiplyVector(new Vector3(0,0,size.z));
+
+            min = mat.MultiplyPoint(bc.center - size/2);
+            ax = new Vector4(dx.normalized.x,dx.normalized.x,dx.normalized.x,dx.magnitude);
+            ay = new Vector4(dy.normalized.x,dy.normalized.y,dz.normalized.z,dy.magnitude);
+            az = new Vector4(dz.normalized.x,dz.normalized.y,dz.normalized.z,dz.magnitude);
+       }
+    }
+    private BoxColliderDesc[] boxColliderDescs;
+    private ComputeBuffer boxColliderBuffer;
+    private int boxColliderCount;
+
+    //使用这个数据来记录碰撞本身的信息
+    struct CollisionInfo
+    {
+        public Vector3 constrainPosition;
+        public Vector3 velocity;
+        public Vector3 normal;
+    }
+    private ComputeBuffer collisionInfoBuffer;
+    
+    int kernelInitCollisionConstraints;
+    int kernelComputeCollisionConstraints;
 
     private void Start()
     {
+        UpdateParameters();
         //Step1:交接Advanced Mesh API
         GenerateMesh();
 
@@ -58,6 +127,8 @@ public class Chapter6_3 : MonoBehaviour
         InitComputeMesh();
         //计算外力
         InitExternalForce();
+        //初始化碰撞约束
+        InitCollisionConstrain();
         //定义布料的粒子的粒子结构
         InitComputeParticles();
     }
@@ -171,7 +242,7 @@ public class Chapter6_3 : MonoBehaviour
         particleCount = originalMesh.vertexCount;
 
         kernelInitParticle = cs.FindKernel("InitParticle");
-        particleBuffer = new ComputeBuffer(particleCount,sizeof(float)*9);
+        particleBuffer = new ComputeBuffer(particleCount,sizeof(float)*13+sizeof(int));
 
         cs.SetBuffer(kernelInitParticle,"originalVertexBuffer",originalVertexBuffer);
         cs.SetBuffer(kernelInitParticle,"originalIndexBuffer",originalIndexBuffer);
@@ -215,9 +286,11 @@ public class Chapter6_3 : MonoBehaviour
             cs.SetFloat("deltaTime",timeStep);
 
             //开始布料解算
-            DispatchThreads(kernelComputeExtrenalForce,particleCount);
+            DispatchThreads(kernelComputeExternalForce,particleCount);
             //使用粒子来解算，迭代次数是粒子的数量，即模型的顶点数
             DispatchThreads(kernelComputeParticle,particleCount);
+            //在计算碰撞约束相关
+            DispatchThreads(kernelComputeCollisionConstraints,particleCount);
             //结束布料解算
             //粒子解算完之后，迭代次数是三角形的数量
             DispatchThreads(kernelComputeMesh,triangleCount);
@@ -229,13 +302,65 @@ public class Chapter6_3 : MonoBehaviour
     //Step3:ExternalForce
     private void InitExternalForce()
     {
-        kernelComputeExtrenalForce = cs.FindKernel("ComputeExternalForce");
-        cs.SetBuffer(kernelComputeExtrenalForce,"particleBuffer",particleBuffer);
+        kernelComputeExternalForce = cs.FindKernel("ComputeExternalForce");
+        cs.SetBuffer(kernelComputeExternalForce,"particleBuffer",particleBuffer);
+    }
+
+    //Step4 :计算碰撞约束
+    private void InitCollisionConstrain()
+    {
+        kernelInitCollisionConstraints = cs.FindKernel("InitCollisionConstraints");
+        kernelComputeCollisionConstraints = cs.FindKernel("ComputeCollisionConstraints");
+    
+
+        //每个粒子碰撞信息初始化
+        cs.SetBuffer(kernelInitCollisionConstraints,"particleBuffer",particleBuffer);
+        collisionInfoBuffer = new ComputeBuffer(particleCount,sizeof(float)*9);
+        cs.SetBuffer(kernelInitCollisionConstraints,"collisionInfoBuffer",collisionInfoBuffer);
+
+        DispatchThreads(kernelInitCollisionConstraints,particleCount);
+
+        //碰撞体初始化
+        //通过场景中的碰撞体来初始化自定义的碰撞体结构体
+        sphereColliderCount = sphereColliders.Length;
+        sphereColliderDescs = new SphereColliderDesc[sphereColliderCount];
+        if(sphereColliderCount>0)
+        {
+            for(int i=0;i<sphereColliderCount;i++)
+                sphereColliderDescs[i] = new SphereColliderDesc(sphereColliders[i]);
+            sphereColliderBuffer = new ComputeBuffer(sphereColliderCount,sizeof(float)*4);   
+            sphereColliderBuffer.SetData(sphereColliderDescs);
+        }
+        else
+          sphereColliderBuffer = new ComputeBuffer(1,sizeof(float)*4);  
+
+        boxColliderCount = boxColliders.Length;
+        boxColliderDescs = new BoxColliderDesc[boxColliderCount];
+        if(boxColliderCount>0)
+        {
+            for(int i = 0;i<boxColliderCount;i++)
+                boxColliderDescs[i] = new BoxColliderDesc(boxColliders[i]);
+            boxColliderBuffer = new ComputeBuffer(boxColliderCount,sizeof(float)*15);
+            boxColliderBuffer.SetData(boxColliderDescs);    
+        }  
+        else
+          boxColliderBuffer = new ComputeBuffer(1,sizeof(float)*15);
+
+        cs.SetBuffer(kernelComputeCollisionConstraints,"particleBuffer",particleBuffer);
+        cs.SetBuffer(kernelComputeCollisionConstraints,"collisionInfoBuffer",collisionInfoBuffer);
+        cs.SetBuffer(kernelComputeCollisionConstraints,"sphereColliderBuffer",sphereColliderBuffer);
+        cs.SetBuffer(kernelComputeCollisionConstraints,"boxColliderBuffer",boxColliderBuffer);
+
+        cs.SetInt("sphereColliderCount",sphereColliderCount);
+        cs.SetInt("boxColliderCount",boxColliderCount);
     }
 
     private void UpdateParameters()
     {
         cs.SetVector("gravity",gravity);
+        cs.SetVector("wind",wind);
+        cs.SetFloat("density",density);
+        cs.SetFloat("dampingForec",dampingForec);
     }
 
     private void OnValidate()

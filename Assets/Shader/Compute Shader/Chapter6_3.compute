@@ -3,6 +3,8 @@
 #pragma kernel ComputeParticle
 #pragma kernel ComputeMesh
 #pragma kernel ComputeExternalForce
+#pragma kernel InitCollisionConstraints
+#pragma kernel ComputeCollisionConstraints
 
 //Step1.0:
 ByteAddressBuffer originalIndexBuffer;
@@ -18,6 +20,9 @@ struct Particle
     float3 position;
     float3 predictPosition;
     float3 velocity;
+    float3 normal;
+    float mass;
+    int constraintsType;
 };
 RWStructuredBuffer<Particle> particleBuffer;
 
@@ -28,6 +33,42 @@ float4x4 worldToLocalMatrix;
 
 //Step3.0
 float3 gravity;
+float3 wind;
+float density;
+float dampingForec;
+
+//Step4.0
+struct SphereColliderDesc
+{
+    float3 center;  //世界坐标系下
+    float radius;
+};
+
+struct CollisionInfo
+{
+    float3 constrainPosition;
+    float3 velocity;
+    float3 normal;
+};
+
+struct BoxColliderDesc
+{
+    float3 min;
+    //xyz代表轴在世界空间下的朝向，w代表length
+    float4 ax;
+    float4 ay;
+    float4 az;
+};
+RWStructuredBuffer<CollisionInfo> collisionInfoBuffer;
+StructuredBuffer<SphereColliderDesc> sphereColliderBuffer;
+StructuredBuffer<BoxColliderDesc> boxColliderBuffer;
+
+int sphereColliderCount;
+int boxColliderCount;
+// 作为枚举的uint一定要声明为静态变量
+const static int ConstraintsTypeDistance = 0;
+const static int ConstraintsTypePin = 1;
+const static int ConstraintsTypeCollision = 2;
 
 //step1.0
 void LoadOriginalVertex(uint index,out float3 position,out float3 normal)
@@ -90,20 +131,32 @@ Particle GenerateParticle(uint index)
 
     //转换到世界坐标系下
     float3 worldPosition = mul(localToWorldMatrix,float4(localPosition,1)).xyz;
+    float3 worldNormal = mul(localToWorldMatrix,float4(localNormal,0)).xyz;
 
     //初始化粒子属性
     Particle p = particleBuffer[index];
     p.position = worldPosition;
     p.predictPosition = worldPosition;
     p.velocity = 0;
-
+    p.normal = normalize(worldNormal);
+    // 用来记录该粒子是否和碰撞体有碰撞约束，0: Distance距离约束，1：pin固定位置约束，2：Collision碰撞约束
+    p.constraintsType = ConstraintsTypeDistance;
     return p;
+}
+
+float GetArea(float3 p0,float3 p1,float3 p2)
+{
+    float3 v0 = p1-p0;
+    float3 v1 = p2-p0;
+    return 0.5f*length(cross(v0,v1));
 }
 
 //每次迭代均为一个三角形
 [numthreads(64,1,1)]
 void ComputeMeshTest (uint3 id : SV_DispatchThreadID)
 {
+    if(id.x>=triangleCount)
+      return;
     //读取顶点索引
     uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);// id * 3[triangle vertices] * 4[bytes]
 
@@ -150,13 +203,20 @@ void InitParticle (uint3 id : SV_DispatchThreadID)
     Particle p1 = GenerateParticle(triIndex.y);
     Particle p2 = GenerateParticle(triIndex.z);
 
+    //对粒子的质量赋初值
+    float area = GetArea(p0.position,p1.position,p2.position);
+    float mass = density * area/3;
+    p0.mass = mass;
+    p1.mass = mass;
+    p2.mass = mass;
+
     particleBuffer[triIndex.x] = p0;
     particleBuffer[triIndex.y] = p1;
     particleBuffer[triIndex.z] = p2;
 }
 
 [numthreads(64,1,1)]
-void ComputeParticle (uint3 id : SV_DispatchThreadID)
+void ComputeParticle (uint3 id : SV_DispatchThreadID)   
 {
     if(id.x>=particleCount)
       return;
@@ -186,7 +246,7 @@ void ComputeVertex(uint index)
 
     //计算normal
     float3 newNormal = QuatMul(q,on);
-    float3 localNormal = mul(worldToLocalMatrix,float4(newNormal,1)).xyz;
+    float3 localNormal = mul(worldToLocalMatrix,float4(newNormal,0)).xyz;
 
     StoreVertex(index,localPosition,localNormal);
 }
@@ -209,14 +269,181 @@ void ComputeExternalForce (uint3 id : SV_DispatchThreadID)
 {
     if(id.x>=particleCount)
        return;
+
+    // 这里添加的velocity和predict position是基于 pbd的结构，
+	// 不同于传统的 pba （physically based animation）
     Particle p = particleBuffer[id.x];   
     float3 position = p.position;
     float3 velocity = p.velocity;
 
-    //处理重力
-    float3 v = velocity + gravity*deltaTime;
+    //处理重力+风力
+    float3 windInNormalDirection = dot(wind,p.normal)*wind;//p.normal为归一化
+    float safeMass = max(p.mass,0.000001f);
+    float3 v = velocity + (gravity+windInNormalDirection/safeMass)*deltaTime;
+    //添加阻力
+    v*=max(0,1-dampingForec/safeMass);
     p.predictPosition = position + v*deltaTime;
 
     particleBuffer[id.x] = p;
+}
+
+[numthreads(64,1,1)]
+void InitCollisionConstraints(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=particleCount)
+       return;
+
+    CollisionInfo collisionInfo = collisionInfoBuffer[id.x];
+	collisionInfo.constrainPosition = 0;
+	collisionInfo.normal = 0;
+	collisionInfo.velocity = 0;
+
+    collisionInfoBuffer[id.x] = collisionInfo;
+}
+
+//计算轴约束
+struct ConcatInfo
+{
+    float3 position;
+    float3 normal;
+};
+
+
+// 计算粒子是否和碰撞体碰撞，如果碰撞，则得到碰撞信息 ConcatInfo
+bool GetClosesfacePoint(float3 pos,SphereColliderDesc sphere,ConcatInfo concatInfo)
+{
+    concatInfo.position = 0;
+    concatInfo.normal = 0;
+    //计算粒子是否和sphereCollider碰撞
+    float3 c2p = pos - sphere.center;
+    float d2 = dot(c2p,c2p);
+    float r2 = sphere.radius*sphere.radius;
+
+    if(d2<r2)
+    {
+        // 如果当前粒子的位置已经在球体的碰撞体内
+		// 则让粒子沿着 从球体中心指向当前粒子位置的方向, 移动一个半径的距离，即球体表面
+        concatInfo.normal = normalize(c2p);
+        concatInfo.position = sphere.center + concatInfo.normal*sphere.radius;
+
+        return true;
+    }
+    else
+        return false;
+}
+
+bool GetClosesfacePoint(float3 pos,BoxColliderDesc box,ConcatInfo concatInfo)
+{
+    //计算粒子是否和BoxCollider碰撞
+    // 1. 首先得到从立方体最小点指向当前粒子位置的向量
+    float3 m2p = pos - box.min;
+    // 2. 得到 该向量在立方体三个边轴上的投影
+    float3 projOnAxis = float3(
+        dot(m2p.x,box.ax),
+        dot(m2p.y,box.ay),
+        dot(m2p.z,box.az)
+    );
+    // 3. 得到立方体三个边轴的长度
+    float3 axisLength = float3(box.ax.w,box.ay.z,box.az.w);
+    // 4. 判断投影在边轴更靠近左边界还是右边届（0：左边界，1：右边界）
+    int3 side = step(axisLength*0.5f,projOnAxis);
+    // 5. 计算投影和边轴的距离，并用正负区分是在正轴还是负轴
+    int3 signedSide = 1-2*side;// -1：右，1：左
+    float3 signeDist = signedSide *(projOnAxis - side *axisLength);
+
+    // 6. 如果所有的投影的距离都 > 0
+    bool inside = all(signeDist>0);
+    if(inside)
+    {
+        //得到交点的距离
+        //从x轴开始赋初值并判断
+        float dst = signeDist.x;
+        float4 axis = box.ax;
+        int sideFlag = side.y;
+        float axisIndex = 0;
+
+        if(signeDist.y<dst)
+        {
+            float dst = signeDist.y;
+            float3 axis = box.ay;
+            int sideFlag = side.y;
+            float axisIndex = 1;
+        }
+        if(signeDist.z<signeDist.y)
+        {
+            float dist = signeDist.z;
+            float3 axis = box.az;
+            int sideFlag = side.z;
+            float axisIndex = 2;
+        }
+        concatInfo.normal = sideFlag>0?axis.xyz:-axis.xyz;
+        float3 offset = projOnAxis[axisIndex] - sideFlag * axis.w;
+        concatInfo.position = pos - axis*offset;
+        return true;
+    }
+    return false;
+}
+
+// 如果粒子和碰撞体产生碰撞
+void EnableCollisionConstraints(int index,ConcatInfo concatInfo)
+{
+    concatInfo.position = 0;
+    concatInfo.normal = 0;
+    //粒子更新
+    Particle p = particleBuffer[index];
+
+    // 标记当前粒子的碰撞标签
+    p.constraintsType |= ConstraintsTypeCollision; 
+    particleBuffer[index] = p;
+
+    // 粒子碰撞信息的更新
+    CollisionInfo collisionInfo = collisionInfoBuffer[index];
+    collisionInfo.constrainPosition = concatInfo.position+concatInfo.normal * 0.05f;
+    collisionInfo.normal = concatInfo.normal;
+	collisionInfo.velocity = 0;
+
+    collisionInfoBuffer[index] = collisionInfo;
+}
+
+// 如果粒子和所有碰撞体都没有产生碰撞
+Particle DisableCollisionConstraints(Particle p)
+{
+    //将碰撞标记去除
+    p.constraintsType &= ~ConstraintsTypeCollision; 
+    return p;
+}
+
+[numthreads(64,1,1)]
+void ComputeCollisionConstraints (uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=particleCount)
+      return;
+    Particle p = particleBuffer[id.x];
+    
+    //先判断粒子和所有的球体碰撞体是否有碰撞
+    for(int i=0;i<sphereColliderCount;i++)
+    {
+        SphereColliderDesc sphere = sphereColliderBuffer[i];
+        ConcatInfo concatInfo;
+        // 解算过程中都使用 predictPosition
+        if(GetClosesfacePoint(p.predictPosition,sphere,concatInfo))
+        {
+            EnableCollisionConstraints(id.x,concatInfo);
+            return;
+        }
+    }
+
+    // 再判断粒子和所有的立方体碰撞体是否有碰撞
+    for(int i = 0;i<boxColliderCount;i++)
+    {
+        BoxColliderDesc box = boxColliderBuffer[i];
+        ConcatInfo concatInfo;
+        if(GetClosesfacePoint(p.predictPosition,box,concatInfo))
+        {
+            return;
+        }
+    }
+
+    particleBuffer[id.x] = DisableCollisionConstraints(p);
 }
 
