@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine.Rendering;
 using Unity.Mathematics;
 using System;
+using UnityEngine.UIElements;
 
 public class Chapter6_3 : MonoBehaviour
 {
@@ -181,6 +182,63 @@ public class Chapter6_3 : MonoBehaviour
     [SerializeField] private float compressStiffness=1;//压缩系数
     [SerializeField] private float strengthStiffness=1;//拉升系数
 
+    //5.2原子锁
+    //使用这个buffer来处理距离约束和弯曲约束的粒子的位置矫正
+    ComputeBuffer correctPositionAsUIntBuffer;
+
+    //Step5.3:弯曲约束
+    struct InnerEdgeInfo
+    {
+        public uint index0;
+        public uint index1;
+        public List<uint> triangleIndices;//相邻三角形中“对面那个顶点”的索引（Vertex Index）。   
+
+        public InnerEdgeInfo(uint i0,uint i1)
+        {
+            index0=i0;
+            index1=i1;
+
+            triangleIndices = new List<uint>();
+        }
+        public void AddTriangleIndex(uint index)
+        {
+            if(!triangleIndices.Contains(index))
+               triangleIndices.Add(index);
+        }
+    };
+    private Dictionary<uint,InnerEdgeInfo> innerEdgeInfoDic;
+
+    struct BendInfo
+    {
+        public uint index0;// 共享边的顶点 0
+        public uint index1;// 共享边的顶点 1
+        public uint index2;//三角形 A 中除共享边外的第三个顶点
+        public uint index3;//三角形 B 中除共享边外的第三个顶点
+
+        public float angle;
+
+        public BendInfo(uint i0,uint i1,uint i2,uint i3)
+        {
+            index0 = i0;
+            index1 = i1;
+            index2 = i2;
+            index3 = i3;
+            angle = 0;
+        }
+    }
+    ComputeBuffer bendInfoBuffer;
+    private int bendInfoCount;
+    [SerializeField] private float bendStiffness = 1;
+    private int kernelInitBendConstraints;
+    private int kernelComputeBendConstraints;
+
+    //5.4固定约束
+    [SerializeField] private SphereCollider[] pinTransforms;//寻找sphere collider的半径来寻找需要约束的顶点
+    private int pinInfoCount;
+    private int kernelInitPinConstaints;
+    private int kernelComputePinConstraints;
+    ComputeBuffer pinInfoBuffer;//存储对应 Pin 粒子的详细配置
+    ComputeBuffer pinIndexBuffer;//记录每一个pin约束绑定的是哪一个粒子
     private void Start()
     {
         UpdateParameters();
@@ -195,8 +253,14 @@ public class Chapter6_3 : MonoBehaviour
         InitExternalForce();
         //初始化碰撞约束
         InitCollisionConstrain();
+        //原子锁
+        InitCorrectPosition();
         //初始化距离约束
         InitDistanceConstraint();
+        //初始化弯曲约束
+        InitBlendConstraints();
+        //初始化固定约束
+        InitPinConstraints();
         //初始化最终碰撞约束
         InitComputeFinalConstraints();
         //定义布料的粒子的粒子结构
@@ -350,6 +414,8 @@ public class Chapter6_3 : MonoBehaviour
         //计算当前能切出几个固定的 timeStep
         int cnt = Mathf.FloorToInt(nexFrameTime/timeStep);
 
+        UpdatePinConstraints();
+
         //3. 执行固定步长的物理解算
         for(int i=0;i<cnt;i++)
         {
@@ -365,6 +431,10 @@ public class Chapter6_3 : MonoBehaviour
                 cs.SetFloat("iteratorIndex",j);
                 //5.1计算距离约束
                 DispatchThreads(kernelComputeDistanceConstraints,edgeInfoCount);
+
+                //5.3计算弯曲约束
+                DispatchThreads(kernelComputeBendConstraints,bendInfoCount);
+
                 //计算最终碰撞约束
                 DispatchThreads(kernelComputeFinalConstraints,particleCount);
             }
@@ -465,6 +535,8 @@ public class Chapter6_3 : MonoBehaviour
         //取得Edfe由于需要考虑是否重复处理同一边的问题，目前放在CPU
         Dictionary<uint,EdgeInfo> di = new Dictionary<uint, EdgeInfo>();
 
+        innerEdgeInfoDic = new Dictionary<uint, InnerEdgeInfo>();
+
         //遍历所有三角面
         for(int i=0;i<triangleCount;i++)
         {
@@ -472,6 +544,7 @@ public class Chapter6_3 : MonoBehaviour
             uint index1 = (uint)originalMesh.triangles[i*3+1];
             uint index2 = (uint)originalMesh.triangles[i*3+2];
 
+            //距离约束相关
             uint edgeHash0 = GetEdgeHash(index0,index1);
             di.TryAdd(edgeHash0,new EdgeInfo(index0,index1));
 
@@ -480,6 +553,16 @@ public class Chapter6_3 : MonoBehaviour
 
             uint edgeHash2 = GetEdgeHash(index2,index0);
             di.TryAdd(edgeHash2,new EdgeInfo(index2,index0));
+
+            //弯曲约束相关
+            innerEdgeInfoDic.TryAdd(edgeHash0,new InnerEdgeInfo(index0,index1));
+            innerEdgeInfoDic[edgeHash0].AddTriangleIndex(index2);
+
+            innerEdgeInfoDic.TryAdd(edgeHash1,new InnerEdgeInfo(index1,index2));
+            innerEdgeInfoDic[edgeHash1].AddTriangleIndex(index0);
+
+            innerEdgeInfoDic.TryAdd(edgeHash2,new InnerEdgeInfo(index2,index0));
+            innerEdgeInfoDic[edgeHash2].AddTriangleIndex(index1);
         }
 
         //把字典 di 中保存的所有边（EdgeInfo）的值全部拿出来，打包组合成一个 C# 的数组（EdgeInfo[]）。
@@ -497,14 +580,111 @@ public class Chapter6_3 : MonoBehaviour
         kernelComputeDistanceConstraints = cs.FindKernel("ComputeDistanceConstraints");
         cs.SetBuffer(kernelComputeDistanceConstraints,"edgeInfoBuffer",edgeInfoBuffer);
         cs.SetBuffer(kernelComputeDistanceConstraints,"particleBuffer",particleBuffer);
+        cs.SetBuffer(kernelComputeDistanceConstraints,"correctPositionAsUIntBuffer",correctPositionAsUIntBuffer);
     }
 
+    //5.3:弯曲约束
+    private void InitBlendConstraints()
+    {
+        InnerEdgeInfo[] info = innerEdgeInfoDic.Values.ToArray();
+        List<BendInfo> bendInfoList = new List<BendInfo>();
+        for(int i = 0;i<info.Length;i++)
+        {
+            if(info[i].triangleIndices.Count==2)
+            {
+                bendInfoList.Add(new BendInfo(info[i].index0,info[i].index1,info[i].triangleIndices[0],info[i].triangleIndices[1]));
+            }
+        }
+
+        bendInfoCount = bendInfoList.Count;
+        bendInfoBuffer = new ComputeBuffer(bendInfoCount,sizeof(uint)*4+sizeof(float));
+
+        kernelInitBendConstraints = cs.FindKernel("InitBendConstraints");
+        cs.SetBuffer(kernelInitBendConstraints,"bendInfoBuffer",bendInfoBuffer);
+        cs.SetBuffer(kernelInitBendConstraints,"particleBuffer",particleBuffer);
+        cs.SetInt("bendInfoCount",bendInfoCount);
+
+        DispatchThreads(kernelInitBendConstraints,bendInfoCount);
+
+        kernelComputeBendConstraints = cs.FindKernel("ComputeBendConstraints");
+        cs.SetBuffer(kernelComputeBendConstraints,"particleBuffer",particleBuffer);
+        cs.SetBuffer(kernelComputeBendConstraints,"bendInfoBuffer",bendInfoBuffer);
+        cs.SetBuffer(kernelComputeBendConstraints,"correctPositionAsUIntBuffer",correctPositionAsUIntBuffer);
+    }
+
+    private Vector4[] GetPinInfo()
+    {
+        if(pinTransforms!=null&&pinTransforms.Length!=0)
+        {
+            Vector4[] pinInfos = new Vector4[pinTransforms.Length];
+            for(int i=0;i<pinTransforms.Length;i++)
+            {
+                SphereCollider sc = pinTransforms[i];
+                float3 pos = sc.center+sc.transform.position;
+                float radius = sc.radius;
+                pinInfos[i] = new Vector4(pos.x,pos.y,pos.z,radius);
+            }
+            return pinInfos;
+        }
+        return null;
+    }
+    //5.4：固定约束
+    private void InitPinConstraints()
+    {
+        Vector4[] pinInfos = GetPinInfo();
+        if(pinInfos!=null)
+        {
+            pinInfoCount = pinInfos.Length;
+            pinInfoBuffer = new ComputeBuffer(pinInfoCount,sizeof(float)*4);
+            pinInfoBuffer.SetData(pinInfos);
+
+            pinIndexBuffer = new ComputeBuffer(pinInfoCount,sizeof(uint));
+
+            kernelInitPinConstaints = cs.FindKernel("InitPinConstraints");
+            cs.SetBuffer(kernelInitPinConstaints,"pinInfoBuffer",pinInfoBuffer);
+            cs.SetBuffer(kernelInitPinConstaints,"particleBuffer",particleBuffer);
+            cs.SetBuffer(kernelInitPinConstaints,"pinIndexBuffer",pinIndexBuffer);
+            cs.SetInt("pinInfoCount",pinInfoCount);
+
+            DispatchThreads(kernelInitPinConstaints,particleCount);
+
+            kernelComputePinConstraints = cs.FindKernel("ComputePinConstraints");
+            cs.SetBuffer(kernelComputePinConstraints,"pinIndexBuffer",pinIndexBuffer);
+            cs.SetBuffer(kernelComputePinConstraints,"pinInfoBuffer",pinInfoBuffer);
+            cs.SetBuffer(kernelComputePinConstraints,"particleBuffer",particleBuffer);
+        }
+    }
+
+    //5.1:原子锁
+    private void InitCorrectPosition()
+    {
+        correctPositionAsUIntBuffer = new ComputeBuffer(particleCount,sizeof(uint)*3);
+
+        Vector3[] arr = new Vector3[particleCount];
+        for(int i=0;i<particleCount;i++)
+        {
+            arr[i] = Vector3Int.zero;
+        }
+        correctPositionAsUIntBuffer.SetData(arr);
+    }
     //Strp4.1:计算最终碰撞约束相关
     private void InitComputeFinalConstraints()
     {
         kernelComputeFinalConstraints = cs.FindKernel("ComputeFinalConstraints");
         cs.SetBuffer(kernelComputeFinalConstraints,"particleBuffer",particleBuffer);
         cs.SetBuffer(kernelComputeFinalConstraints,"collisionInfoBuffer",collisionInfoBuffer);
+        cs.SetBuffer(kernelComputeFinalConstraints,"correctPositionAsUIntBuffer",correctPositionAsUIntBuffer);
+    }
+
+    private void UpdatePinConstraints()
+    {
+        Vector4[] pinInfos = GetPinInfo();
+        if(pinInfos!=null)
+        {
+            pinInfoBuffer.SetData(pinInfos);
+            cs.SetBuffer(kernelComputePinConstraints,"pinInfoBuffer",pinInfoBuffer);
+            DispatchThreads(kernelComputePinConstraints,pinInfoCount);
+        }
     }
     private void UpdateParameters()
     {
@@ -515,6 +695,7 @@ public class Chapter6_3 : MonoBehaviour
         cs.SetFloat("iteratorCount",iteratorCount);
         cs.SetFloat("strengthStiffness",strengthStiffness);
         cs.SetFloat("compressStiffness",compressStiffness);
+        cs.SetFloat("bendStiffness",bendStiffness);
     }
 
     private void OnValidate()
@@ -529,5 +710,14 @@ public class Chapter6_3 : MonoBehaviour
         originalVertexBuffer?.Dispose();
         vertexBuffer?.Dispose();
         particleBuffer?.Dispose();
+        sphereColliderBuffer?.Dispose();
+        boxColliderBuffer?.Dispose();
+        capsuleColliderBuffer?.Dispose();
+        collisionInfoBuffer?.Dispose();
+        edgeInfoBuffer?.Dispose();
+        correctPositionAsUIntBuffer?.Dispose();
+        bendInfoBuffer?.Dispose();
+        pinIndexBuffer?.Dispose();
+        pinInfoBuffer?.Dispose();
     }
 }

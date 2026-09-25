@@ -45,21 +45,22 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Distart: 0.577
+    - _CubeStrength: 0.553
+    - _Distart: 0.434
     - _Distort: 0
-    - _Opacity: 0.698
+    - _Opacity: 1
     - _Pow: 0.712
-    - _Power: 9.78
-    - _Rotate: 244
+    - _Power: 5
+    - _Rotate: 40
     - _Rotate_CubeMap: 0
     - _Roughness: 0.3
-    - _Scale: 0.8
+    - _Scale: 1
     - _SkyLightOpacity: 0
     m_Colors:
-    - _AddColor: {r: 0.19688691, g: 0.34591186, b: 0.20052166, a: 1}
-    - _BackLightColor: {r: 0.9433953, g: 0.9559748, b: 0.28558987, a: 1}
+    - _AddColor: {r: 0, g: 0.5283019, b: 0.027186556, a: 1}
+    - _BackLightColor: {r: 0.75755966, g: 1, b: 0.58176094, a: 1}
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1, g: 0.98938555, b: 0.48742133, a: 1}
-    - _DiffuseColor: {r: 0.19215687, g: 0.3529412, b: 0.19607843, a: 1}
+    - _DiffuseColor: {r: 0.14530665, g: 0.5849056, b: 0.15926443, a: 1}
     - _SSSColor: {r: 0.7735849, g: 0.7735849, b: 0.7735849, a: 1}
   m_BuildTextureStacks: []

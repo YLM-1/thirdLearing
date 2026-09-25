@@ -6,12 +6,19 @@
 
 #pragma kernel ComputeExternalForce
 
-#pragma kernel InitDistanceConstraints
 #pragma kernel InitCollisionConstraints
-#pragma kernel ComputeFinalConstraints
-
-#pragma kernel ComputeDistanceConstraints
 #pragma kernel ComputeCollisionConstraints
+
+#pragma kernel InitDistanceConstraints
+#pragma kernel ComputeDistanceConstraints
+
+#pragma kernel InitBendConstraints
+#pragma kernel ComputeBendConstraints
+
+#pragma kernel InitPinConstraints
+#pragma kernel ComputePinConstraints
+
+#pragma kernel ComputeFinalConstraints
 
 //Step1.0:
 ByteAddressBuffer originalIndexBuffer;
@@ -103,6 +110,29 @@ int edgeInfoCount;
 float strengthStiffness;
 float compressStiffness;
 
+//Step5.2:
+RWStructuredBuffer<uint3> correctPositionAsUIntBuffer;
+
+//Step5.3:
+struct BendInfo
+{
+    uint index0;// 共享边的顶点 0
+    uint index1;// 共享边的顶点 1
+    uint index2;//三角形 A 中除共享边外的第三个顶点
+    uint index3;//三角形 B 中除共享边外的第三个顶点
+
+    float angle;
+};
+
+RWStructuredBuffer<BendInfo> bendInfoBuffer;
+int bendInfoCount;
+float bendStiffness;
+
+//Step5.4:
+StructuredBuffer<float4> pinInfoBuffer;
+RWStructuredBuffer<uint> pinIndexBuffer;
+int pinInfoCount;
+
 //step1.0
 void LoadOriginalVertex(uint index,out float3 position,out float3 normal)
 {
@@ -188,7 +218,7 @@ float GetArea(float3 p0,float3 p1,float3 p2)
 [numthreads(64,1,1)]
 void ComputeMeshTest (uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=triangleCount)
+    if(id.x>=(uint)triangleCount)
       return;
     //读取顶点索引
     uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);// id * 3[triangle vertices] * 4[bytes]
@@ -227,7 +257,7 @@ void ComputeMeshTest (uint3 id : SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void InitParticle (uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=triangleCount)
+    if(id.x>=(uint)triangleCount)
        return;
     
     uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);
@@ -251,13 +281,20 @@ void InitParticle (uint3 id : SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void ComputeParticle (uint3 id : SV_DispatchThreadID)   
 {
-    if(id.x>=particleCount)
+    if(id.x>=(uint)particleCount)
       return;
     
     Particle p = particleBuffer[id.x];
 
     //作为测试
     // p.position +=float3(0,-1,0)*deltaTime;
+
+    //处理固定约束
+    if((p.constraintsType & ConstraintsTypePin) == ConstraintsTypePin)
+    {
+        p.velocity=0;
+        p.predictPosition = p.position;
+    }
 
     //处理碰撞约束
     if((p.constraintsType & ConstraintsTypeCollision) == ConstraintsTypeCollision)
@@ -292,7 +329,7 @@ void ComputeVertex(uint index)
 [numthreads(64,1,1)]
 void ComputeMesh (uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=triangleCount)
+    if(id.x>=(uint)triangleCount)
       return;
 
     uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);
@@ -305,7 +342,7 @@ void ComputeMesh (uint3 id : SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void ComputeExternalForce (uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=particleCount)
+    if(id.x>=(uint)particleCount)
        return;
 
     // 这里添加的velocity和predict position是基于 pbd的结构，
@@ -328,7 +365,7 @@ void ComputeExternalForce (uint3 id : SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void InitCollisionConstraints(uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=particleCount)
+    if(id.x>=(uint)particleCount)
        return;
 
     CollisionInfo collisionInfo = collisionInfoBuffer[id.x];
@@ -350,6 +387,8 @@ struct ConcatInfo
 // 计算粒子是否和碰撞体碰撞，如果碰撞，则得到碰撞信息 ConcatInfo
 bool GetClosestSurfacePoint(float3 pos,SphereColliderDesc sphere,out ConcatInfo concatInfo)
 {
+    concatInfo.position = 0;
+    concatInfo.normal = 0;
     //计算粒子是否和sphereCollider碰撞
     float3 c2p = pos - sphere.center;
     float d2 = dot(c2p,c2p);
@@ -370,6 +409,9 @@ bool GetClosestSurfacePoint(float3 pos,SphereColliderDesc sphere,out ConcatInfo 
 
 bool GetClosestSurfacePoint(float3 pos,BoxColliderDesc box,out ConcatInfo concatInfo)
 {
+    concatInfo.position = 0;
+    concatInfo.normal = 0;
+
     //计算粒子是否和BoxCollider碰撞
     // 1. 首先得到从立方体最小点指向当前粒子位置的向量
     float3 m2p = pos - box.min;
@@ -424,6 +466,9 @@ bool GetClosestSurfacePoint(float3 pos,BoxColliderDesc box,out ConcatInfo concat
 
 bool GetClosestSurfacePoint(float3 pos,CapsuleColliderDesc capsule,out ConcatInfo concatInfo)
 {
+    concatInfo.position = 0;
+    concatInfo.normal = 0;
+
     float radius = capsule.radius;
     float4 axis = capsule.axis;
     float3 origin = capsule.origin;
@@ -512,7 +557,7 @@ Particle DisableCollisionConstraints(Particle p)
 [numthreads(64,1,1)]
 void ComputeCollisionConstraints (uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=particleCount)
+    if(id.x>=(uint)particleCount)
       return;
     Particle p = particleBuffer[id.x];
     
@@ -559,9 +604,23 @@ void ComputeCollisionConstraints (uint3 id : SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void ComputeFinalConstraints (uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=particleCount)
+    if(id.x>=(uint)particleCount)
        return;
     Particle p=particleBuffer[id.x];
+    
+    // 从原子计算的buffer中读取矫正的位置
+    float3 correctPosition;
+
+    correctPosition.x = asfloat(correctPositionAsUIntBuffer[id.x].x);
+    correctPosition.y = asfloat(correctPositionAsUIntBuffer[id.x].y);
+    correctPosition.z = asfloat(correctPositionAsUIntBuffer[id.x].z);
+
+    //读取完成后，一定不能忘记将buffer中的数据重新赋值为0，方便下一帧的计算
+    correctPositionAsUIntBuffer[id.x] = uint3(0,0,0);
+
+    //再将矫正位置的值叠加在 predictPosition
+    p.predictPosition += correctPosition;
+    particleBuffer[id.x] = p;
     
     //处理碰撞相关计算
     int constraintsType = p.constraintsType;
@@ -582,7 +641,7 @@ void ComputeFinalConstraints (uint3 id : SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void InitDistanceConstraints(uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=edgeInfoCount)
+    if(id.x>=(uint)edgeInfoCount)
        return;
     EdgeInfo edgeInfo = edgeInfoBuffer[id.x];
     uint index0 = edgeInfo.index0;
@@ -595,10 +654,33 @@ void InitDistanceConstraints(uint3 id : SV_DispatchThreadID)
     edgeInfoBuffer[id.x] = edgeInfo;
 }
 
+void InterlockedAddFloat(int index,float newDeltaVal,int axis)
+{
+    uint i_val = asuint(newDeltaVal);
+    uint tmp0 = 0;//你以为当前内存里存的值。
+    uint tmp1; //【输出参数】 硬件去翻看内存后，实际读出来的旧值。
+
+    [allow_uav_condition]
+    while(true)
+    {
+        InterlockedCompareExchange(correctPositionAsUIntBuffer[index][axis],tmp0,i_val,tmp1);
+
+        if(tmp0==tmp1)
+        {
+            break;
+        }
+
+        tmp0 = tmp1;
+        i_val = asuint(newDeltaVal+asfloat(tmp1));
+    }
+
+    return;
+}
+
 [numthreads(64,1,1)]
 void ComputeDistanceConstraints(uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=edgeInfoCount)
+    if(id.x>=(uint)edgeInfoCount)
       return;
     EdgeInfo edgeInfo = edgeInfoBuffer[id.x];
     
@@ -635,12 +717,163 @@ void ComputeDistanceConstraints(uint3 id : SV_DispatchThreadID)
     float di = 1.0f / (iteratorCount - iteratorIndex);
     float totalMass = m0+m1;
 
-    // p0 的预测位置 += (纠正方向) * (偏差距离) * (瘦子质量比例) * 时间步长;
-    p0.predictPosition += correct*di*m1/totalMass*deltaTime;
-    // p1 的预测位置 -= (纠正方向) * (偏差距离) * (胖子质量比例) * 时间步长;
-    p1.predictPosition -= correct * di *m0 / totalMass * deltaTime;
-    particleBuffer[index0] = p0;
-    particleBuffer[index1] = p1;
+    float3 correctPosition0 = correct*di*m1/totalMass*deltaTime;
+    float3 correctPosition1 = -correct*di*m0/totalMass*deltaTime;
+
+    // 使用原子计算来代替，避免出现模型顶点飞掉的bug
+    // // p0 的预测位置 += (纠正方向) * (偏差距离) * (瘦子质量比例) * 时间步长;
+    // p0.predictPosition += correct*di*m1/totalMass*deltaTime;
+    // // p1 的预测位置 -= (纠正方向) * (偏差距离) * (胖子质量比例) * 时间步长;
+    // p1.predictPosition -= correct * di *m0 / totalMass * deltaTime;
+    // particleBuffer[index0] = p0;
+    // particleBuffer[index1] = p1;
+
+    // 需要将修正的position叠加计算回 correctPositionAsUIntBuffer
+	// 但是原子计算仅支持float，所以需要分解为xyz分别计算
+    InterlockedAddFloat(index0,correctPosition0.x,0);
+    InterlockedAddFloat(index0,correctPosition0.y,1);
+    InterlockedAddFloat(index0,correctPosition0.z,2);
+
+    InterlockedAddFloat(index1,correctPosition1.x,0);
+    InterlockedAddFloat(index1,correctPosition1.y,1);
+    InterlockedAddFloat(index1,correctPosition1.z,2);
 }
 
+float GetTriangleInitialAngle(uint i0,uint i1,uint i2,uint i3)
+{
+    float3 position0 = particleBuffer[i0].position;
+    float3 position1 = particleBuffer[i1].position;
+    float3 position2 = particleBuffer[i2].position;
+    float3 position3 = particleBuffer[i3].position;
 
+    float3 normal0 = cross(position1-position0,position1-position2);
+    float3 normal1 = cross(position2-position0,position1-position0);
+
+    float angle = dot(normal0,normal1);
+    return angle;
+}
+
+[numthreads(64,1,1)]
+void InitBendConstraints(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=(uint)bendInfoCount)
+       return;
+    
+    BendInfo bendInfo = bendInfoBuffer[id.x];
+
+    bendInfo.angle = GetTriangleInitialAngle(bendInfo.index0,bendInfo.index1,bendInfo.index2,bendInfo.index3);
+
+    bendInfoBuffer[id.x] = bendInfo;
+}
+
+[numthreads(64,1,1)]
+void ComputeBendConstraints(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=(uint)bendInfoCount)
+       return;
+
+    BendInfo bendInfo = bendInfoBuffer[id.x];  
+
+    Particle p0 = particleBuffer[bendInfo.index0];
+    Particle p1 = particleBuffer[bendInfo.index1];
+    Particle p2 = particleBuffer[bendInfo.index2];
+    Particle p3 = particleBuffer[bendInfo.index3];
+
+    float3 edge01 = p1.predictPosition - p0.predictPosition;
+    float3 edge02 = p2.predictPosition - p0.predictPosition;
+    float3 edge03 = p3.predictPosition - p0.predictPosition;
+
+    float3 normal0 = cross(edge01,edge02);
+    float normal0Length = length(normal0);
+    normal0 = normalize(normal0);
+
+    float3 normal1 = cross(edge01,edge03);
+    float normal1Length = length(normal1);
+    normal1 = normalize(normal1);
+
+    float d = dot(normal0,normal1);
+
+    float3 q2 = (cross(edge01,normal1)+cross(normal0,edge01)*d)/normal0Length;
+    float3 q3 = (cross(edge01,normal0)+cross(normal1,edge01)*d)/normal1Length;
+    float3 q1 = -(cross(edge02, normal1) + cross(normal0, edge02) * d) / normal0Length - (cross(edge03, normal0) + cross(normal1, edge03) * d) / normal1Length;
+	float3 q0 = -q1 - q2 - q3;
+
+    float w0 = 1/p0.mass;
+    float w1 = 1/p1.mass;
+    float w2 = 1/p2.mass;
+    float w3 = 1/p3.mass;
+
+    float sum = w0 * dot(q0, q0) + w1 * dot(q1, q1)  + w2 * dot(q2, q2) + w3 * dot(q3, q3);
+    sum = max(0.01, sum);
+
+    float s = - (acos(d) - acos(bendInfo.angle)) * sqrt(1 - d * d) / sum;
+
+    if(isfinite(s))
+    {
+        float di =1.0f/(iteratorCount - iteratorIndex);
+
+        // 此处为4个顶点的矫正值
+		float3 correctPosition0 = s * w0 * q0 * di * bendStiffness;
+        float3 correctPosition1 = s * w1 * q1 * di * bendStiffness;
+        float3 correctPosition2 = s * w2 * q2 * di * bendStiffness;
+        float3 correctPosition3 = s * w3 * q3 * di * bendStiffness;
+
+        InterlockedAddFloat(bendInfo.index0, correctPosition0.x, 0);
+		InterlockedAddFloat(bendInfo.index0, correctPosition0.y, 1);
+		InterlockedAddFloat(bendInfo.index0, correctPosition0.z, 2);
+
+        InterlockedAddFloat(bendInfo.index1, correctPosition1.x, 0);
+		InterlockedAddFloat(bendInfo.index1, correctPosition1.y, 1);
+		InterlockedAddFloat(bendInfo.index1, correctPosition1.z, 2);
+
+        InterlockedAddFloat(bendInfo.index2, correctPosition2.x, 0);
+		InterlockedAddFloat(bendInfo.index2, correctPosition2.y, 1);
+		InterlockedAddFloat(bendInfo.index2, correctPosition2.z, 2);
+                                             
+        InterlockedAddFloat(bendInfo.index3, correctPosition3.x, 0);
+		InterlockedAddFloat(bendInfo.index3, correctPosition3.y, 1);
+		InterlockedAddFloat(bendInfo.index3, correctPosition3.z, 2);
+    }
+}
+
+[numthreads(64,1,1)]
+void InitPinConstraints(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=(uint)particleCount)
+      return;
+    Particle p = particleBuffer[id.x];
+    
+    for(int i = 0;i<pinInfoCount;i++)
+    {
+        float4 pinInfo = pinInfoBuffer[i];
+        float dist = length(pinInfo.xyz - p.predictPosition);
+        if(dist<pinInfo.w)
+        {
+            p.constraintsType |= ConstraintsTypePin;
+            p.velocity = 0;
+            p.position = pinInfo.xyz;
+            p.predictPosition = pinInfo.xyz;
+
+            particleBuffer[id.x] = p;
+
+            pinIndexBuffer[i] = id.x;
+            return;
+        }
+    }
+}
+
+[numthreads(64,1,1)]
+void ComputePinConstraints(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x>=(uint)pinInfoCount)
+       return;
+    float4 pinInfo = pinInfoBuffer[id.x];
+
+    uint index = pinIndexBuffer[id.x];
+
+    Particle p = particleBuffer[index];
+	p.position = pinInfo.xyz;
+	p.predictPosition = pinInfo.xyz;
+	p.velocity = 0;
+	particleBuffer[index] = p;
+}

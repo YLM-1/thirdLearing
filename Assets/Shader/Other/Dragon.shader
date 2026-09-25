@@ -16,6 +16,7 @@
 		
 		[Header(Reflection)]
 		_CubeMap("Cube Map",Cube)="white"{}
+		_CubeStrength("Cube Strength",Range(0,1))=1
 		_Rotate("Rotate",Range(0,360))=0
     }
 	SubShader
@@ -50,6 +51,7 @@
 	float4 _DiffuseColor;
 	float4 _AddColor;
 	float _Opacity;
+	float _CubeStrength;
 	float4 _BackLightColor;
 	CBUFFER_END
 
@@ -59,11 +61,11 @@
 	TEXTURECUBE(_CubeMap);
 	SAMPLER(sampler_CubeMap);
 
-	 float3 RotateAround(float degree,float3 target)
+	    float3 RotateAround(float degree,float3 target)
 		{
 			float rad=degree*PI/180;
 			float2x2 m_rotate=float2x2(cos(rad),-sin(rad),sin(rad),cos(rad));
-			float2 reflectDir=mul(m_rotate,target.xz);
+			float2 reflectDir=mul(m_rotate,target.xz);//绕着y轴旋转
 			target=float3(reflectDir.x,target.y,reflectDir.y);
 			return target;
 		}
@@ -115,8 +117,7 @@
 			  float4 cube_color=SAMPLE_TEXTURECUBE(_CubeMap,sampler_CubeMap,reflectview);
 			  //菲尼尔效果
 			  float fresnel=pow(1.0-saturate(dot(worldNormal,worldViewDir)),4.0);
-
-			  float3 env_color=DecodeHDREnvironment(cube_color,_CubeMap_HDR)*fresnel;
+			  float3 env_color=DecodeHDREnvironment(cube_color,_CubeMap_HDR)*_CubeStrength+fresnel;
 			  
 			  uint lightsCount=GetAdditionalLightsCount();
 			  for(int lightIndex=0;lightIndex<lightsCount;lightIndex++)
@@ -130,7 +131,7 @@
 			   float3 final_color=env_color+color+final_diffuse;
 			   // float3 final_color=color;
 			   final_color=AcesTonemap(final_color);
-			     return float4(final_color.xyxy);
+			   return float4(final_color,1);
 		   }
 		 ENDHLSL
 	  }
