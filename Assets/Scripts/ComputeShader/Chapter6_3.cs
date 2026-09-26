@@ -70,6 +70,11 @@ public class Chapter6_3 : MonoBehaviour
             center = sc.transform.position + sc.center;
             radius = sc.transform.localScale.x * sc.radius;
         }
+
+        public void UpdatePosition(SphereCollider sc)
+        {
+            center = sc.center + sc.transform.position;
+        }
     };
     private SphereColliderDesc[] sphereColliderDescs;
     private ComputeBuffer sphereColliderBuffer;
@@ -85,9 +90,9 @@ public class Chapter6_3 : MonoBehaviour
         public Vector4 ay;
         public Vector4 az;
 
-        public BoxColliderDesc(BoxCollider bc)
+        void Init(BoxCollider bc)
         {
-            Matrix4x4 mat = bc.transform.localToWorldMatrix;
+             Matrix4x4 mat = bc.transform.localToWorldMatrix;
             Vector3 size = bc.size;
 
             //xyz为Normalized方向，w为长度
@@ -99,7 +104,19 @@ public class Chapter6_3 : MonoBehaviour
             ax = new Vector4(dx.normalized.x,dx.normalized.y,dx.normalized.z,dx.magnitude);
             ay = new Vector4(dy.normalized.x,dy.normalized.y,dy.normalized.z,dy.magnitude);
             az = new Vector4(dz.normalized.x,dz.normalized.y,dz.normalized.z,dz.magnitude);
-       }
+        }
+
+        public BoxColliderDesc(BoxCollider bc)
+        {
+            min = Vector3.zero;
+            ax = ay = az = Vector4.zero;
+            Init(bc);
+        }
+
+        public void UpdatePosition(BoxCollider bc)
+        {
+            Init(bc);
+        }
     }
     private BoxColliderDesc[] boxColliderDescs;
     private ComputeBuffer boxColliderBuffer;
@@ -113,6 +130,14 @@ public class Chapter6_3 : MonoBehaviour
         public float radius;
         public Vector4 axis;//.w胶囊体中间圆柱段的高度/长度（即两端半球球心之间的距离，`height - 2 * radius`）
         public CapsuleColliderDesc(CapsuleCollider cc)
+        {
+            origin = Vector3.zero;
+            radius = 0;
+            axis = Vector4.zero;
+            Init(cc);
+        }
+
+        void Init(CapsuleCollider cc)
         {
             origin = cc.center;
             origin[cc.direction] = origin[cc.direction] - cc.height*0.5f+cc.radius;//计算得到的是点
@@ -140,6 +165,11 @@ public class Chapter6_3 : MonoBehaviour
 
             radius = radiusScale*cc.radius;
             axis = new Vector4(dir.normalized.x,dir.normalized.y,dir.normalized.z,(cc.height - 2 * cc.radius) * axisScale);
+        }
+
+        public void UpdatePosition(CapsuleCollider cc)
+        {
+            Init(cc);
         }
     }
     private CapsuleColliderDesc[] capsuleColliderDescs;
@@ -239,6 +269,61 @@ public class Chapter6_3 : MonoBehaviour
     private int kernelComputePinConstraints;
     ComputeBuffer pinInfoBuffer;//存储对应 Pin 粒子的详细配置
     ComputeBuffer pinIndexBuffer;//记录每一个pin约束绑定的是哪一个粒子
+
+    //Step6.1添加rigidBody交互
+    //刚体对布料的作用力
+    struct RigidBodyDesc
+    {
+        public float mass;
+        public float bounciness;
+        public Vector3 velocity;
+        public int rigidBodyIndex;
+        public RigidBodyDesc(Rigidbody rb)
+        {
+            if(rb)
+            {
+                mass = rb != null ? rb.mass : 0f;
+                bounciness = 0.5f;
+                velocity = Vector3.zero;
+                rigidBodyIndex = rb.GetInstanceID();
+            }
+            else
+            {
+                 mass = -1;
+                bounciness = 0.5f;
+                velocity = Vector3.zero;
+                rigidBodyIndex = -1;
+            }
+        }
+
+        public void UpdateVelocity(Rigidbody rb)
+        {
+            if(rb)
+               velocity = rb.velocity;
+            else
+               velocity = Vector3.zero;  
+        }
+    };
+    Rigidbody[] sphereRigidbodies;
+    Rigidbody[] boxRigidbodies;
+    Rigidbody[] capsuleRigidbodies;
+    RigidBodyDesc[] sphereRigidbodyDescs;
+    RigidBodyDesc[] boxRigidbodyDescs;
+    RigidBodyDesc[] capsuleRigidbodyDescs;
+    ComputeBuffer sphereRigidBodyDescBuffer;
+    ComputeBuffer boxRigidBodyDescBuffer;
+    ComputeBuffer capsuleRigidBodyDescBuffer;
+
+    //Step6.2布料对刚体的作用力
+    struct RigidBodyForce
+    {
+        public int index;  //rigidBody的id
+        public Vector3 force;
+    }
+    ComputeBuffer rigidBodyForceBuffer;
+    ComputeBuffer argsBuffer;
+    Dictionary<int,Rigidbody> rigidBodyDic;
+
     private void Start()
     {
         UpdateParameters();
@@ -259,6 +344,8 @@ public class Chapter6_3 : MonoBehaviour
         InitDistanceConstraint();
         //初始化弯曲约束
         InitBlendConstraints();
+        //添加RigidBody交互
+        InitRigidBody();
         //初始化固定约束
         InitPinConstraints();
         //初始化最终碰撞约束
@@ -404,6 +491,7 @@ public class Chapter6_3 : MonoBehaviour
     {
         kernelComputeParticle = cs.FindKernel("ComputeParticle");
         cs.SetBuffer(kernelComputeParticle,"particleBuffer",particleBuffer);
+        cs.SetBuffer(kernelComputeParticle,"collisionInfoBuffer",collisionInfoBuffer);
     }
     //布料算法需要在一个稳定的帧率下进行计算
     //Update() 的调用频率取决于图像渲染的帧率（FPS）。如果场景复杂导致掉帧，或者设备性能波动，Update() 每次调用的时间间隔（即 Time.deltaTime）就会发生剧烈变化。
@@ -415,6 +503,10 @@ public class Chapter6_3 : MonoBehaviour
         int cnt = Mathf.FloorToInt(nexFrameTime/timeStep);
 
         UpdatePinConstraints();
+
+        UpdateRigidbody();
+
+        UpdateRigidBodyForceBuffer();
 
         //3. 执行固定步长的物理解算
         for(int i=0;i<cnt;i++)
@@ -444,6 +536,10 @@ public class Chapter6_3 : MonoBehaviour
             //粒子解算完之后，迭代次数是三角形的数量
             DispatchThreads(kernelComputeMesh,triangleCount);
         }
+
+        //一帧的所有子步结束后，统一把冲量施加到刚体上，避免重复施加
+        ApplyForceToRigidBody();
+
         //后续池子里面剩的时间
         nexFrameTime%=timeStep;
     }
@@ -655,6 +751,177 @@ public class Chapter6_3 : MonoBehaviour
         }
     }
 
+    //查找Rigidbody：先找自身，找不到再往父物体找（没有则返回null，由 RigidBodyDesc 以 mass=0 处理）
+    private static Rigidbody GetRigidbody(Collider collider)
+    {
+        Rigidbody rb = collider.GetComponent<Rigidbody>();
+        return rb != null ? rb : collider.GetComponentInParent<Rigidbody>();
+    }
+
+    //添加RigidBody交互
+    private void InitRigidBody()
+    {
+        rigidBodyDic = new Dictionary<int, Rigidbody>();
+
+        if(sphereColliderCount>0)
+        {
+            sphereRigidbodies = new Rigidbody[sphereColliderCount];
+            sphereRigidbodyDescs = new RigidBodyDesc[sphereColliderCount];
+            for(int i=0;i<sphereColliderCount;i++)
+            {
+                sphereRigidbodies[i] = GetRigidbody(sphereColliders[i]);
+                sphereRigidbodyDescs[i] = new RigidBodyDesc(sphereRigidbodies[i]);
+
+                if(sphereRigidbodies[i]!=null)
+                {
+                    rigidBodyDic[sphereRigidbodies[i].GetInstanceID()]=sphereRigidbodies[i];
+                }
+            }
+            sphereRigidBodyDescBuffer = new ComputeBuffer(sphereColliderCount,sizeof(float)*5+sizeof(int));
+        }
+        else  
+            sphereRigidBodyDescBuffer = new ComputeBuffer(1,sizeof(float)*5+sizeof(int));
+
+        if(boxColliderCount>0)
+        {
+            boxRigidbodies = new Rigidbody[boxColliderCount];
+            boxRigidbodyDescs = new RigidBodyDesc[boxColliderCount];
+            
+            for(int i = 0;i<boxColliderCount;i++)
+            {
+                boxRigidbodies[i] = GetRigidbody(boxColliders[i]);
+                boxRigidbodyDescs[i] = new RigidBodyDesc(boxRigidbodies[i]);
+
+                if(boxRigidbodies[i]!=null)
+                {
+                    rigidBodyDic[boxRigidbodies[i].GetInstanceID()]=boxRigidbodies[i];
+                }
+            }
+
+            if(boxRigidbodyDescs!=null)
+               boxRigidBodyDescBuffer = new ComputeBuffer(boxColliderCount,sizeof(float)*5+sizeof(int));
+        }    
+        else
+            boxRigidBodyDescBuffer = new ComputeBuffer(1,sizeof(float)*5+sizeof(int)); 
+
+        if(capsuleColliderCount>0)
+        {
+            capsuleRigidbodies = new Rigidbody[capsuleColliderCount];
+            capsuleRigidbodyDescs = new RigidBodyDesc[capsuleColliderCount];
+            
+            for(int i = 0;i<capsuleColliderCount;i++)
+            {
+                capsuleRigidbodies[i] = GetRigidbody(capsuleColliders[i]);
+                capsuleRigidbodyDescs[i] = new RigidBodyDesc(capsuleRigidbodies[i]);
+
+                if(capsuleRigidbodies[i]!=null)
+                {
+                    rigidBodyDic[capsuleRigidbodies[i].GetInstanceID()]=capsuleRigidbodies[i];
+                }
+            }
+
+            if(capsuleRigidbodyDescs!=null)
+               capsuleRigidBodyDescBuffer = new ComputeBuffer(capsuleColliderCount,sizeof(float)*5+sizeof(int));
+        }    
+        else
+            capsuleRigidBodyDescBuffer = new ComputeBuffer(1,sizeof(float)*5+sizeof(int));    
+
+        //无论有没有刚体，ComputeCollisionConstraints 都声明了 rigidBodyForceBuffer，
+        //必须始终创建并绑定一个可追加队列，否则 Dispatch 会报资源未绑定
+        //容量按粒子数的若干倍预留：同一粒子可能在多个子步里重复追加
+        rigidBodyForceBuffer = new ComputeBuffer(Mathf.Max(1,particleCount*8),sizeof(float)*3+sizeof(int),ComputeBufferType.Append);
+        argsBuffer = new ComputeBuffer(1,sizeof(uint),ComputeBufferType.IndirectArguments);
+    }
+
+    private void UpdateRigidbody()
+    {
+        if(sphereColliderCount>0)
+        {
+            for(int i=0;i<sphereColliderCount;i++)
+            {
+                sphereColliderDescs[i].UpdatePosition(sphereColliders[i]);
+                sphereRigidbodyDescs[i].UpdateVelocity(sphereRigidbodies[i]);
+            }
+            sphereColliderBuffer.SetData(sphereColliderDescs);
+            sphereRigidBodyDescBuffer.SetData(sphereRigidbodyDescs);
+        }
+
+        if(boxColliderCount>0)
+        {
+            for(int i=0;i<boxColliderCount;i++)
+            {
+                boxColliderDescs[i].UpdatePosition(boxColliders[i]);
+                boxRigidbodyDescs[i].UpdateVelocity(boxRigidbodies[i]);
+            }
+            boxColliderBuffer.SetData(boxColliderDescs);
+            boxRigidBodyDescBuffer.SetData(boxRigidbodyDescs);
+        }
+
+        if(capsuleColliderCount>0)
+        {
+            for(int i=0;i<capsuleColliderCount;i++)
+            {
+                capsuleColliderDescs[i].UpdatePosition(capsuleColliders[i]);
+                capsuleRigidbodyDescs[i].UpdateVelocity(capsuleRigidbodies[i]);
+            }
+            capsuleColliderBuffer.SetData(capsuleColliderDescs);
+            capsuleRigidBodyDescBuffer.SetData(capsuleRigidbodyDescs);
+        }
+
+        cs.SetBuffer(kernelComputeCollisionConstraints,"sphereColliderBuffer",sphereColliderBuffer);
+        cs.SetBuffer(kernelComputeCollisionConstraints,"sphereRigidBodyDescBuffer",sphereRigidBodyDescBuffer);
+
+        cs.SetBuffer(kernelComputeCollisionConstraints,"boxColliderBuffer",boxColliderBuffer);
+        cs.SetBuffer(kernelComputeCollisionConstraints,"boxRigidBodyDescBuffer",boxRigidBodyDescBuffer);
+
+        cs.SetBuffer(kernelComputeCollisionConstraints,"capsuleColliderBuffer",capsuleColliderBuffer);
+        cs.SetBuffer(kernelComputeCollisionConstraints,"capsuleRigidBodyDescBuffer",capsuleRigidBodyDescBuffer);
+    }
+
+    //Step6.2：粒子对刚体的作用力
+    private void UpdateRigidBodyForceBuffer()
+    {
+        //每帧只清空一次刚体冲量队列；无论有没有刚体都要绑定（ComputeCollisionConstraints 声明了该 buffer）
+        rigidBodyForceBuffer.SetCounterValue(0);
+        cs.SetBuffer(kernelComputeCollisionConstraints,"rigidBodyForceBuffer",rigidBodyForceBuffer);
+    }
+
+    private void ApplyForceToRigidBody()
+    {
+        if(rigidBodyDic!=null&&rigidBodyDic.Count>0)
+        {
+            ComputeBuffer.CopyCount(rigidBodyForceBuffer,argsBuffer,0);
+
+            uint[] args = new uint[1];
+            argsBuffer.GetData(args);
+            int count = (int)args[0];
+            //防止追加数量超过 buffer 容量导致 GetData 越界
+            count = Mathf.Min(count,rigidBodyForceBuffer.count);
+            RigidBodyForce[] forces = new RigidBodyForce[count];
+
+             if (count > 0)
+            {
+                rigidBodyForceBuffer.GetData(forces);
+
+                for (int i = 0; i < count; ++i)
+                {
+                    RigidBodyForce force = forces[i];
+
+                    int rigidbodyIndex = force.index;
+                    // ��˸�������˲ʱ�ٶȱ仯��������������
+                    // ͨ��һ�κ�������˲ʱʩ�Ӵ��ٶȱ仯���� ForceMode.Impulse ��ͬ����������������Σ�VelocityChange ��������ÿ��������ٶȡ�
+                    // ���ڲ�������������Ķ��󣬴�ģʽ�ǳ����á� �ڴ�ģʽ�£�ʩ���ڴ˸�����������ĵ�λΪ������ / ʱ�䡣
+
+                    // ��˸�������˲ʱ�������������������
+                    // ͨ��һ�κ�������˲ʱʩ�Ӵ˳��������ģʽȡ���ڸ������������ˣ��������ϸߵĶ���Ҫ�����������ϵ͵Ķ���ͬ���ƶ���ŤתЧ��������ʩ�Ӹ��������
+                    // ����ʩ��˲ʱ�������������籬ը����ײ������������ģʽ�ǳ����á� �ڴ�ģʽ�£�ʩ���ڴ˸�����������ĵ�λΪ������* ����/ ʱ�䡣
+                    if(rigidBodyDic.TryGetValue(rigidbodyIndex,out Rigidbody targetRigidbody))
+                        targetRigidbody.AddForce(force.force, ForceMode.Impulse);
+                }
+            }
+        }
+    }
+
     //5.1:原子锁
     private void InitCorrectPosition()
     {
@@ -719,5 +986,22 @@ public class Chapter6_3 : MonoBehaviour
         bendInfoBuffer?.Dispose();
         pinIndexBuffer?.Dispose();
         pinInfoBuffer?.Dispose();
+        sphereRigidBodyDescBuffer?.Dispose();
+        boxRigidBodyDescBuffer?.Dispose();
+        capsuleRigidBodyDescBuffer?.Dispose();
+        rigidBodyForceBuffer?.Dispose();
+        argsBuffer?.Dispose();
+
+        //运行时创建的 Mesh 不会自动随 MeshFilter 释放，需要手动销毁
+        if(originalMesh)
+        {
+            if(Application.isPlaying) Destroy(originalMesh);
+            else DestroyImmediate(originalMesh);
+        }
+        if(newMesh)
+        {
+            if(Application.isPlaying) Destroy(newMesh);
+            else DestroyImmediate(newMesh);
+        }
     }
 }

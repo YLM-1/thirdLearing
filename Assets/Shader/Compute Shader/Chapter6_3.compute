@@ -96,6 +96,7 @@ float iteratorIndex;
 const static int ConstraintsTypeDistance = 0;
 const static int ConstraintsTypePin = 1;
 const static int ConstraintsTypeCollision = 2;
+const static int ConstraintsTypeRigidBody = 4;
 
 
 //Step5.1
@@ -133,16 +134,39 @@ StructuredBuffer<float4> pinInfoBuffer;
 RWStructuredBuffer<uint> pinIndexBuffer;
 int pinInfoCount;
 
+//Step6.1：RigidBody交互
+//对布料的作用力
+struct RigidBodyDesc
+{
+    float mass;
+    float bounciness;
+    float3 velocity;
+    int rigidBodyIndex;
+};
+StructuredBuffer<RigidBodyDesc> sphereRigidBodyDescBuffer;
+StructuredBuffer<RigidBodyDesc> boxRigidBodyDescBuffer;
+StructuredBuffer<RigidBodyDesc> capsuleRigidBodyDescBuffer;
+
+//Step6.2:对rigid的作用力
+struct RigidBodyForce
+{
+    int index;  //rigidBody的id
+    float3 force;
+};
+AppendStructuredBuffer<RigidBodyForce> rigidBodyForceBuffer;
+
 //step1.0
-void LoadOriginalVertex(uint index,out float3 position,out float3 normal)
+void LoadOriginalVertex(uint index,out float3 position,out float3 normal,out float3 tangent)
 {
     uint pi = index*11*4;// index * (3[position.xyz] + 3[normal.xyz] + 3[tangent.xyz] + 2[uv.xy]) * 4[bytes]
     uint ni = pi+3*4;
+    uint ti = pi+6*4;
 
     //Load3：负责把 12 字节的原始数据搬出来（拿到的是 uint3）
     //asfloat(...)：负责重新解读这 12 字节（把 uint3 重新解读为 float3）。
     position = asfloat(originalVertexBuffer.Load3(pi));
     normal = asfloat(originalVertexBuffer.Load3(ni));
+    tangent = asfloat(originalVertexBuffer.Load3(ti));
 }
 
 float3 DisplacePosition(float3 p)
@@ -155,14 +179,16 @@ float3 DisplacePosition(float3 p)
     return p + disp;
 }
 
-void StoreVertex(uint index,float3 position,float3 normal)
+void StoreVertex(uint index,float3 position,float3 normal,float3 tangent)
 {
     uint pi = index*11*4;
     uint ni = pi + 3*4;
+    uint ti = pi+6*4;
 
     //Store3 是 RWByteAddressBuffer 的写入函数，表示“从 pi 字节偏移量开始，连续写入 12 个字节（3 个 32位字）的数据”。
     vertexBuffer.Store3(pi,asuint(position));
     vertexBuffer.Store3(ni,asuint(normal));
+    vertexBuffer.Store3(ti,asuint(tangent));
 }
 
 inline float4 QuatBetween2Vectors(float3 v0, float3 v1)
@@ -189,8 +215,8 @@ Particle GenerateParticle(uint index)
 {
     //拿到的是模型坐标系下的position和normal
     //在 Unity（以及所有 3D 软件如 Blender/Maya）中，Mesh 文件（.fbx 或内置网格）里记录的 vertices 和 normals 默认都是相对于该模型自身中心点（Pivot）的相对坐标，即模型局部空间（Local Space）。
-    float3 localPosition,localNormal;
-    LoadOriginalVertex(index,localPosition,localNormal);
+    float3 localPosition,localNormal,localTangent;
+    LoadOriginalVertex(index,localPosition,localNormal,localTangent);
 
     //转换到世界坐标系下
     float3 worldPosition = mul(localToWorldMatrix,float4(localPosition,1)).xyz;
@@ -218,40 +244,40 @@ float GetArea(float3 p0,float3 p1,float3 p2)
 [numthreads(64,1,1)]
 void ComputeMeshTest (uint3 id : SV_DispatchThreadID)
 {
-    if(id.x>=(uint)triangleCount)
-      return;
-    //读取顶点索引
-    uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);// id * 3[triangle vertices] * 4[bytes]
+    // if(id.x>=(uint)triangleCount)
+    //   return;
+    // //读取顶点索引
+    // uint3 triIndex = originalIndexBuffer.Load3(id.x*3*4);// id * 3[triangle vertices] * 4[bytes]
 
-    //读取原始Position和normal
-    float3 p0,n0;
-    LoadOriginalVertex(triIndex.x,p0,n0);
+    // //读取原始Position和normal,tangent
+    // float3 p0,n0,t0;
+    // LoadOriginalVertex(triIndex.x,p0,n0,t0);
 
-    float3 p1,n1;
-    LoadOriginalVertex(triIndex.y,p1,n1);
+    // float3 p1,n1,t1;
+    // LoadOriginalVertex(triIndex.y,p1,n1,t1);
 
-    float3 p2,n2;
-    LoadOriginalVertex(triIndex.z,p2,n2);
+    // float3 p2,n2,t2;
+    // LoadOriginalVertex(triIndex.z,p2,n2,t2);
 
-    float3 np0 = DisplacePosition(p0);
-    float3 np1 = DisplacePosition(p1);
-    float3 np2 = DisplacePosition(p2);
+    // float3 np0 = DisplacePosition(p0);
+    // float3 np1 = DisplacePosition(p1);
+    // float3 np2 = DisplacePosition(p2);
 
-    // 计算出向量（0，0，0）指向p0 和 向量（0，0，0）指向p1之间的旋转，使用四元数表示
-    // 计算均在模型坐标空间系下，再使用这个旋转来旋转法线
-    float4 q0 = QuatBetween2Vectors(p0,np0);
-    float3 nn0 = QuatMul(q0, n0);
+    // // 计算出向量（0，0，0）指向p0 和 向量（0，0，0）指向p1之间的旋转，使用四元数表示
+    // // 计算均在模型坐标空间系下，再使用这个旋转来旋转法线
+    // float4 q0 = QuatBetween2Vectors(p0,np0);
+    // float3 nn0 = QuatMul(q0, n0);
 
-    float4 q1 = QuatBetween2Vectors(p1,np1);
-    float3 nn1 = QuatMul(q1,n1);
+    // float4 q1 = QuatBetween2Vectors(p1,np1);
+    // float3 nn1 = QuatMul(q1,n1);
 
-    float4 q2 = QuatBetween2Vectors(p2,np2);
-    float3 nn2 = QuatMul(q2,n2);
+    // float4 q2 = QuatBetween2Vectors(p2,np2);
+    // float3 nn2 = QuatMul(q2,n2);
 
-    //保存新计算好的Position
-    StoreVertex(triIndex.x,np0,nn0);
-    StoreVertex(triIndex.y,np1,nn1);
-    StoreVertex(triIndex.z,np2,nn2);
+    // //保存新计算好的Position
+    // StoreVertex(triIndex.x,np0,nn0);
+    // StoreVertex(triIndex.y,np1,nn1);
+    // StoreVertex(triIndex.z,np2,nn2);
 }
 
 [numthreads(64,1,1)]
@@ -295,10 +321,10 @@ void ComputeParticle (uint3 id : SV_DispatchThreadID)
         p.velocity=0;
         p.predictPosition = p.position;
     }
-
-    //处理碰撞约束
-    if((p.constraintsType & ConstraintsTypeCollision) == ConstraintsTypeCollision)
-       p.velocity = 0;
+    //处理碰撞约束：取碰撞时算出的碰后速度（反弹）
+    else if((p.constraintsType & ConstraintsTypeCollision) == ConstraintsTypeCollision||
+            (p.constraintsType & ConstraintsTypeRigidBody) == ConstraintsTypeRigidBody)
+       p.velocity = collisionInfoBuffer[id.x].velocity;
     else
        p.velocity = (p.predictPosition - p.position)/deltaTime;  
        
@@ -315,15 +341,19 @@ void ComputeVertex(uint index)
     float3 worldPosition = p.position;
     float3 localPosition = mul(worldToLocalMatrix,float4(worldPosition,1)).xyz;
 
-    float3 op,on;
-    LoadOriginalVertex(index,op,on);
+    float3 op,on,ot;
+    LoadOriginalVertex(index,op,on,ot);
     float4 q = QuatBetween2Vectors(op,localPosition);
 
     //计算normal
     float3 newNormal = QuatMul(q,on);
     float3 localNormal = mul(worldToLocalMatrix,float4(newNormal,0)).xyz;
 
-    StoreVertex(index,localPosition,localNormal);
+    //计算tangent
+    float3 newTangent = QuatMul(q,ot);
+    float3 localTangent = mul(worldToLocalMatrix,float4(newTangent,0)).xyz;
+
+    StoreVertex(index,localPosition,localNormal,localTangent);
 }
 
 [numthreads(64,1,1)]
@@ -528,20 +558,56 @@ bool GetClosestSurfacePoint(float3 pos,CapsuleColliderDesc capsule,out ConcatInf
 }
 
 // 如果粒子和碰撞体产生碰撞
-void EnableCollisionConstraints(int index,ConcatInfo concatInfo)
+void EnableCollisionConstraints(int index,ConcatInfo concatInfo,RigidBodyDesc rigid)
 {
     //粒子更新
     Particle p = particleBuffer[index];
 
-    // 标记当前粒子的碰撞标签
+    // 清除上一子步/上一碰撞体残留的碰撞与刚体标签，再打上碰撞标签
+    p.constraintsType &= ~(ConstraintsTypeCollision | ConstraintsTypeRigidBody);
     p.constraintsType |= ConstraintsTypeCollision; 
     particleBuffer[index] = p;
 
     // 粒子碰撞信息的更新
     CollisionInfo collisionInfo = collisionInfoBuffer[index];
-    collisionInfo.constrainPosition = concatInfo.position+concatInfo.normal * 0.05f;
+    //collisionInfo.constrainPosition = concatInfo.position+concatInfo.normal * 0.01f;
+    collisionInfo.constrainPosition = concatInfo.position;
     collisionInfo.normal = concatInfo.normal;
 	collisionInfo.velocity = 0;
+
+    //6.1添加刚体碰撞
+    float m1 = rigid.mass;
+    // 当前的碰撞体是否有rigidbody
+    if(m1>0)
+    {
+        float b = rigid.bounciness;
+        float m0 = p.mass;
+
+        // 在法线方向上符合动量守恒定律
+		// m0 * v0 + m1 * v1 = m0 * v0` + m1 * v1`
+        float3 v0 = (p.predictPosition - p.position)/deltaTime;
+        float3 v0Normal = dot(v0,concatInfo.normal)*concatInfo.normal;
+        // 切向分量在碰撞后保留，避免布料一碰就“粘住”
+        float3 v0Tangential = v0 - v0Normal;
+        float3 v1Normal = dot(rigid.velocity,concatInfo.normal)*concatInfo.normal;
+
+        float3 v0NormalNew = (b + 1) * m1 * v1Normal + v0Normal * (m0 - b * m1)/(m0+m1);
+        float3 v1NormalNew = (b + 1) * m0 * v0Normal + v1Normal * (m1 - b * m0)/(m0+m1);
+
+        p.constraintsType &= ~ConstraintsTypeCollision;
+        p.constraintsType |= ConstraintsTypeRigidBody;
+        particleBuffer[index] = p;
+
+        // 记录粒子碰撞后的速度（法向反弹 + 保留切向），供 ComputeParticle 使用
+        collisionInfo.velocity = v0Tangential + v0NormalNew;
+
+        //记录粒子对刚体的冲量（动量变化）
+        RigidBodyForce force;
+        force.index = rigid.rigidBodyIndex;
+        //冲量 J = m * Δv，CPU 端用 ForceMode.Impulse 施加
+        force.force = m1*(v1NormalNew-v1Normal);
+        rigidBodyForceBuffer.Append(force);
+    }
 
     collisionInfoBuffer[index] = collisionInfo;
 }
@@ -549,8 +615,8 @@ void EnableCollisionConstraints(int index,ConcatInfo concatInfo)
 // 如果粒子和所有碰撞体都没有产生碰撞
 Particle DisableCollisionConstraints(Particle p)
 {
-    //将碰撞标记去除
-    p.constraintsType &= ~ConstraintsTypeCollision; 
+    //将碰撞标记去除（刚体标记也要一并清除，否则会残留到后续帧）
+    p.constraintsType &= ~(ConstraintsTypeCollision | ConstraintsTypeRigidBody); 
     return p;
 }
 
@@ -569,7 +635,7 @@ void ComputeCollisionConstraints (uint3 id : SV_DispatchThreadID)
         // 解算过程中都使用 predictPosition
         if(GetClosestSurfacePoint(p.predictPosition,sphere,concatInfo))
         {
-            EnableCollisionConstraints(id.x,concatInfo);
+            EnableCollisionConstraints(id.x,concatInfo,sphereRigidBodyDescBuffer[i]);
             return;
         }
     }
@@ -581,7 +647,7 @@ void ComputeCollisionConstraints (uint3 id : SV_DispatchThreadID)
         ConcatInfo concatInfo;
         if(GetClosestSurfacePoint(p.predictPosition,box,concatInfo))
         {
-            EnableCollisionConstraints(id.x,concatInfo);
+            EnableCollisionConstraints(id.x,concatInfo,boxRigidBodyDescBuffer[j]);
             return;
         }
     }
@@ -593,7 +659,7 @@ void ComputeCollisionConstraints (uint3 id : SV_DispatchThreadID)
         ConcatInfo concatInfo;
         if(GetClosestSurfacePoint(p.predictPosition,capsule,concatInfo))
         {
-            EnableCollisionConstraints(id.x,concatInfo);
+            EnableCollisionConstraints(id.x,concatInfo,capsuleRigidBodyDescBuffer[k]);
             return;
         }
     }
@@ -624,9 +690,10 @@ void ComputeFinalConstraints (uint3 id : SV_DispatchThreadID)
     
     //处理碰撞相关计算
     int constraintsType = p.constraintsType;
-    if((constraintsType & ConstraintsTypeCollision) == ConstraintsTypeCollision)
+    if((constraintsType & ConstraintsTypeCollision) == ConstraintsTypeCollision||
+       (constraintsType & ConstraintsTypeRigidBody) == ConstraintsTypeRigidBody)
     {
-        float3 position = p.position;
+        float3 position = p.predictPosition;
 
         CollisionInfo collisionInfo = collisionInfoBuffer[id.x];
         float3 deltaP = collisionInfo.constrainPosition - position;
