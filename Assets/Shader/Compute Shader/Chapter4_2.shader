@@ -42,7 +42,7 @@ Shader "Unlit/Chapter4_2"
                 v2f o;
 
                 //此时的粒子Position是在worldSpace下
-                int index = instanceID*6+vertexID;
+                int index = instanceID*6+vertexID;//vertexID:SV_VertexID用于获取当前 GPU 正在绘制的是第几个顶点
                 float4 vertex = float4(vertexBuffer[index].position,1);
 
                 o.vertex = TransformWorldToHClip(vertex);

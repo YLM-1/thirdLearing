@@ -424,13 +424,13 @@ MonoBehaviour:
   cs: {fileID: 7200000, guid: 4f27371cccb725544b2272795684b696, type: 3}
   particleShader: {fileID: 4800000, guid: e6fb3f4ecf7b0b04a925f6c3322bbedc, type: 3}
   cam: {fileID: 102195358}
-  distance: 20
+  distance: 50
   debugObject: {fileID: 0}
   particleCount: 1000
   initialRadius: 5
   speed: 2
   quadSize: 0.5
-  texture: {fileID: 0}
+  texture: {fileID: 2800000, guid: 7bc37a8dc1ef7eb4caa27436788ef6b1, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

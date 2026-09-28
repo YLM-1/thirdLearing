@@ -102,6 +102,4 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     vertexBuffer[index+5].position.x = p.position+halfSize;
     vertexBuffer[index+5].position.y = p.position-halfSize;
     vertexBuffer[index+5].position.z = p.position.z;
-
-    particleBuffer[id.x] = p;
 }

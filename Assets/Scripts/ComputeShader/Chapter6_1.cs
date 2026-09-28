@@ -112,7 +112,7 @@ public class Chapter6_1 : MonoBehaviour
     private void InitPositionsArray()
     {
         Bounds bounds = terrainPrefab.GetComponent<MeshFilter>().sharedMesh.bounds;
-        float yMax = bounds.extents.y+1;
+        float yMax = bounds.extents.y+2;
         for(int i=0;i<grassCount;i++)
         {
             //在平地上进行
@@ -278,7 +278,7 @@ public class Chapter6_1 : MonoBehaviour
         Vector3[] points = GetCameraFarClipPlanePoint(cam);
 
         //传的点我们以顺时针传
-        planes[0] = GetPlane(cameraPosition,points[0],points[2]);
+        planes[0] = GetPlane(cameraPosition,points[2],points[0]);
         planes[1] = GetPlane(cameraPosition,points[2],points[3]);
         planes[2] = GetPlane(cameraPosition,points[3],points[1]);
         planes[3] = GetPlane(cameraPosition,points[1],points[0]);

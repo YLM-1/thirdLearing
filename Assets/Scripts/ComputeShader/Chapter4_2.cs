@@ -94,7 +94,7 @@ public class Chapter4_2 : MonoBehaviour
     private void OnRenderObject()
     {
        mat.SetPass(0);
-       Graphics.DrawProceduralNow(MeshTopology.Triangles, 6, particleCount*6);
+       Graphics.DrawProceduralNow(MeshTopology.Triangles, 6, particleCount);
     }
 
     private void Update()
@@ -115,5 +115,6 @@ public class Chapter4_2 : MonoBehaviour
     private void OnDestroy()
     {
         particleBuffer?.Release();
+        vertexBuffer?.Release();
     }
 }

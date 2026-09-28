@@ -152,8 +152,9 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
                 }
 
                 //开始计算应该取那一层mipmap
+                //因为 NDC 空间的总宽度是-1~1，所以 跨度 / 2（即乘以 0.5）才是这个跨度在归一化 UV 空间0~1里的比例。 
                 uint mipmapLevel = (uint)clamp(log2(max(maxX-minX,maxY-minY)*0.5f*depthTextureSize),0,log2(depthTextureSize)-4);
-                //该层mipmapLevel的大小
+                //该层mipmapLevel时贴图的大小
                 uint size = depthTextureSize/(1<<mipmapLevel);
 
                 //该AABB的左下，右上在该mipmapLevel层级中的位置,size-1
@@ -175,6 +176,7 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
                         depthInTexture = max(depthInTexture, hizTexture.mips[mipmapLevel][int2(pixelLeftBottom.x, pixelRightTop.y)].r);
 
                     if (depthInTexture < depth)
+                    //如果grass包围盒离摄像机最近的深度都比depthTexture的最远还远，说明被遮挡了
                         return;
                 }
                 else
@@ -202,7 +204,7 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
                     float3 boundsPosition = boundsVerts[j];
                     //如果有一个点在视锥体内则不用判断，此AABB就在视锥体内，不剔除
                     if(!IsOutsideThePlane(planes[i],boundsPosition))
-                    break;
+                       break;
                     //如果8个顶点都在某个平面法线背面，则肯定在视锥体外，不能进入 clumpsBuffer
                     if(j==7)
                     return;

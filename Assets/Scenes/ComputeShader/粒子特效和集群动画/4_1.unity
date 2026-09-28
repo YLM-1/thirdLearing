@@ -182,7 +182,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 60
+  field of view: 76
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
@@ -514,11 +514,11 @@ MonoBehaviour:
   cs: {fileID: 7200000, guid: 2172d1fc0515d3f4f8c808963b782a59, type: 3}
   particleShader: {fileID: 4800000, guid: 28560bba9c5c53f478b6a7f677250537, type: 3}
   cam: {fileID: 102195358}
-  distance: 10
+  distance: 30
   debugObject: {fileID: 668585829}
   particleCount: 10000
-  initialRadius: 10
-  speed: 2
+  initialRadius: 5
+  speed: 1
 --- !u!4 &1262157133
 Transform:
   m_ObjectHideFlags: 0
@@ -528,7 +528,7 @@ Transform:
   m_GameObject: {fileID: 1262157131}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 58.6}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

@@ -1,0 +1,144 @@
+#pragma kernel Force
+#pragma kernel Advect
+#pragma kernel Diffusion
+#pragma kernel Divergence
+#pragma kernel Display
+
+#define texlSize (1/float2(width,height))
+
+#define id2UV(id) (id*texlSize) // 就把 id2UV(id) 替换为 (id * texelSize)
+
+// 当前 id周围四邻域的uv
+#define id2UVL(id) ((id+int2(-1,0))*texlSize)
+#define id2UVR(id) ((id+int2(1,0))*texlSize)
+#define id2UVT(id) ((id+int2(0,1))*texlSize)
+#define id2UVB(id) ((id+int2(0,-1))*texlSize)
+
+#define dx 1
+
+#define dx2 (dx*dx)
+
+// 1. 必须声明采样器
+//告诉 GPU 用什么“规则”去读取贴图
+SamplerState sampler_LinearRepeat;
+
+// 2. 补全 tex2D 宏定义（用 SampleLevel 实现双线性插值采样）
+//意义：给复杂的 GPU 采样语法“穿一件简单的外套”，并修复“半像素偏移”。
+#define tex2D(tex, uv) (tex.SampleLevel(sampler_LinearRepeat, uv + 0.5f * texlSize, 0))
+
+//Step1:Force
+Texture2D<float2> input0;
+RWTexture2D<float2> output;
+
+float3 forcePos;
+float3 forceVector;
+float radius;
+
+//Step2:Advect
+Texture2D<float2> input1;
+float advectSpeed;
+
+//Step3:Diffusion
+float viscosity;
+
+//Step4:Divergence
+RWTexture2D<float> div;
+
+//Step5:Display
+Texture2D<float3> inputColor;
+RWTexture2D<float3> outputColor;
+
+float width;
+float height;
+float deltaTime;
+
+[numthreads(8,8,1)]
+void Force (uint2 id : SV_DispatchThreadID)
+{
+    //需要将id转化到uv的01空间
+    float2 pos = id2UV(id);
+
+    float2 deltaPos = forcePos - pos;
+    float2 velocity = forceVector*deltaTime*exp(-dot(deltaPos,deltaPos)/radius);
+
+    //新速度= 原速度 +鼠标推动速度 (velocity)
+    // output[id] = input0[id] + velocity;
+    output[id] = tex2D(input0,pos) + velocity;
+}
+
+// input0: v0
+// input1: v0
+// output: v1
+//速度场 input0 决定墨水往哪飘，而 input1 存储墨水本身的颜色数据
+[numthreads(8,8,1)]
+void Advect (uint2 id : SV_DispatchThreadID)
+{
+    float2 uv = id2UV(id);
+
+    // 逆向寻源：根据当前速度回溯寻找上一时刻的位置
+    float2 distanceUV = uv - tex2D(input0, uv) * deltaTime * advectSpeed;
+
+    // 采样源头坐标的值传给当前像素
+    output[id] = tex2D(input1, distanceUV);
+}
+
+// input0: v0
+// input1: v0
+// output: v1
+//速度场 input0 决定墨水往哪飘，而 input1 存储墨水本身的颜色数据
+[numthreads(8,8,1)]
+void Diffusion (uint2 id : SV_DispatchThreadID)
+{
+    float alpha = dx2/(viscosity*deltaTime);
+    float beta = 4+alpha;
+
+    float2 uvl = id2UVL(id);
+    float2 uvr = id2UVR(id);
+    float2 uvt = id2UVT(id);
+    float2 uvb = id2UVB(id);
+
+    float2 uv = id2UV(id);
+
+    float2 l = tex2D(input0,uvl);
+    float2 r = tex2D(input0,uvr);
+    float2 t = tex2D(input0,uvt);
+    float2 b = tex2D(input0,uvb);
+
+    float2 c = tex2D(input0,uv);
+
+    output[id] = (l+r+t+b+alpha*c)/beta;
+}
+
+// input0: v0
+// inputColor: col0
+// outputColor: col1
+//速度场 input0 决定墨水往哪飘，而 input1 存储墨水本身的颜色数据
+[numthreads(8,8,1)]
+void Display (uint2 id : SV_DispatchThreadID)
+{
+    float2 uv = id2UV(id);
+    // 逆向寻源：根据当前速度回溯寻找上一时刻的位置
+    float2 distanceUV = uv - tex2D(input0, uv) * deltaTime * advectSpeed;
+
+    // 采样源头坐标的值传给当前像素
+    outputColor[id] = tex2D(inputColor, distanceUV);
+}
+
+[numthreads(8,8,1)]
+void Divergence (uint2 id : SV_DispatchThreadID)
+{
+    float2 uvl = id2UVL(id);
+    float2 uvr = id2UVR(id);
+    float2 uvt = id2UVT(id);
+    float2 uvb = id2UVB(id);
+
+    float2 uv = id2UV(id);
+
+    float2 l = tex2D(input0,uvl);
+    float2 r = tex2D(input0,uvr);
+    float2 t = tex2D(input0,uvt);
+    float2 b = tex2D(input0,uvb);
+
+    float2 c = tex2D(input0,uv);
+    div[id] = (r.x-l.x+t.y-b.y)/2;
+}

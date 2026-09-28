@@ -18,16 +18,16 @@ public class Chapter4_3 : MonoBehaviour
         }
     };
 
-    [SerializeField] private float boidSpeed = 150f;
+    [SerializeField] private float boidSpeed = 150f;//单个不需要速度，只是整体需要
     [SerializeField] private float neighbourDistance = 20f;
     [SerializeField] private int boidCount = 1000;
     [SerializeField] private float spawnRadius = 100f;
     [SerializeField] private GameObject boidPrefab;
     [SerializeField] private Transform target;
 
-    [SerializeField] private float alignmentWeight = 1;
-    [SerializeField] private float cohesionWeight = 1;
-    [SerializeField] private float separationWeight = 1;
+    [SerializeField] private float alignmentWeight = 1;//对齐
+    [SerializeField] private float cohesionWeight = 1;//靠近
+    [SerializeField] private float separationWeight = 1;//分离
 
 
     int kernelHandle;
@@ -63,7 +63,8 @@ public class Chapter4_3 : MonoBehaviour
         for(int i=0;i<numOfBoids;i++)
         {
             Vector3 pos = transform.position + Random.insideUnitSphere*spawnRadius;
-            boidGOs[i] = Instantiate(boidPrefab, pos, Quaternion.identity, transform) as GameObject;
+            // boidGOs[i] = Instantiate(boidPrefab, pos, Quaternion.identity, transform) as GameObject;
+            boidGOs[i] = Instantiate(boidPrefab, pos, Quaternion.identity);
 
             boids[i] = new Boid(pos, boidGOs[i].transform.forward);
         }
@@ -91,8 +92,10 @@ public class Chapter4_3 : MonoBehaviour
         boidBuffer.GetData(boids);
         for(int i=0;i<numOfBoids;i++)
         {
-            boidGOs[i].transform.localPosition = boids[i].position;
-            boidGOs[i].transform.localRotation = Quaternion.LookRotation(boids[i].direction);
+            // boidGOs[i].transform.localPosition = boids[i].position;
+            // boidGOs[i].transform.localRotation = Quaternion.LookRotation(boids[i].direction);
+            boidGOs[i].transform.position = boids[i].position;
+            boidGOs[i].transform.rotation = Quaternion.LookRotation(boids[i].direction);
         }
     }
 
