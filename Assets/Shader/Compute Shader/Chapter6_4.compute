@@ -2,6 +2,8 @@
 #pragma kernel Advect
 #pragma kernel Diffusion
 #pragma kernel Divergence
+#pragma kernel Pressure
+#pragma kernel Gradient
 #pragma kernel Display
 
 #define texlSize (1/float2(width,height))
@@ -41,8 +43,10 @@ float advectSpeed;
 //Step3:Diffusion
 float viscosity;
 
-//Step4:Divergence
+//Step4:Projectoin
 RWTexture2D<float> div;
+Texture2D<float> inputPressure;
+RWTexture2D<float> outputPressure;
 
 //Step5:Display
 Texture2D<float3> inputColor;
@@ -58,12 +62,12 @@ void Force (uint2 id : SV_DispatchThreadID)
     //需要将id转化到uv的01空间
     float2 pos = id2UV(id);
 
-    float2 deltaPos = forcePos - pos;
-    float2 velocity = forceVector*deltaTime*exp(-dot(deltaPos,deltaPos)/radius);
+    float2 deltaPos = forcePos.xy - pos;
+    float2 velocity = forceVector.rg*deltaTime*exp(-dot(deltaPos,deltaPos)/radius);
 
     //新速度= 原速度 +鼠标推动速度 (velocity)
     // output[id] = input0[id] + velocity;
-    output[id] = tex2D(input0,pos) + velocity;
+    output[id] = tex2D(input0,pos).rg + velocity;
 }
 
 // input0: v0
@@ -73,6 +77,10 @@ void Force (uint2 id : SV_DispatchThreadID)
 [numthreads(8,8,1)]
 void Advect (uint2 id : SV_DispatchThreadID)
 {
+    // 之所以要使用2是因为tex2D中有0.5的偏移
+    if (id.x > width - 2 || id.y > height - 2)
+        return;
+        
     float2 uv = id2UV(id);
 
     // 逆向寻源：根据当前速度回溯寻找上一时刻的位置
@@ -106,7 +114,116 @@ void Diffusion (uint2 id : SV_DispatchThreadID)
 
     float2 c = tex2D(input0,uv);
 
+    // 处理边界越界, 当处于边界的时候，取速度的反方向
+    if (id.x < 2)
+        l = -c;
+    if (id.x > width - 2)
+        r = -c;
+    if (id.y < 2)
+        b = -c;
+    if (id.y > height - 2)
+        t = -c;
+
     output[id] = (l+r+t+b+alpha*c)/beta;
+}
+
+// input0: v0
+// div: div
+[numthreads(8,8,1)]
+void Divergence (uint2 id : SV_DispatchThreadID)
+{
+    float2 uvl = id2UVL(id);
+    float2 uvr = id2UVR(id);
+    float2 uvt = id2UVT(id);
+    float2 uvb = id2UVB(id);
+
+    float2 uv = id2UV(id);
+
+    float2 l = tex2D(input0,uvl).rg;
+    float2 r = tex2D(input0,uvr).rg;
+    float2 t = tex2D(input0,uvt).rg;
+    float2 b = tex2D(input0,uvb).rg;
+
+    float2 c = tex2D(input0,uv).rg;
+
+    // 处理边界越界, 当处于边界的时候，取速度的反方向
+    if (id.x < 2)
+        l = -c;
+    if (id.x > width - 2)
+        r = -c;
+    if (id.y < 2)
+        b = -c;
+    if (id.y > height - 2)
+        t = -c;
+
+    div[id] = (r.x-l.x+t.y-b.y)*0.5f;
+}
+
+// inputPressure: p0
+// div: div
+// outputPressure: p1
+[numthreads(8,8,1)]
+void Pressure (uint2 id : SV_DispatchThreadID)
+{
+    float alpha = -1;
+    float beta = 4;
+
+    float2 uvl = id2UVL(id);
+    float2 uvr = id2UVR(id);
+    float2 uvt = id2UVT(id);
+    float2 uvb = id2UVB(id);
+
+    // DIv是标量，直接用下标读取当前像素的散度
+    float c = div[id];
+
+
+    float l = tex2D(inputPressure,uvl);
+    float r = tex2D(inputPressure,uvr);
+    float t = tex2D(inputPressure,uvt);
+    float b = tex2D(inputPressure,uvb);
+
+     // 处理边界越界, 当处于边界的时候，取压力的负值
+    if (id.x < 2)
+        l = -c;
+    if (id.x > width - 2)
+        r = -c;
+    if (id.y < 2)
+        b = -c;
+    if (id.y > height - 2)
+        t = -c;
+
+    outputPressure[id] = (l+r+t+b+alpha*c)/beta;
+}
+
+// inputPressure: p0
+// input0: v0
+// output: v1
+[numthreads(8,8,1)]
+void Gradient (uint2 id : SV_DispatchThreadID)
+{
+    // 之所以要使用2是因为tex2D中有0.5的偏移
+    if (id.x > width - 2 || id.y > height - 2)
+        return;
+
+    float alpha = -1;
+    float beta = 4;
+
+    float2 uvl = id2UVL(id);
+    float2 uvr = id2UVR(id);
+    float2 uvt = id2UVT(id);
+    float2 uvb = id2UVB(id);
+
+    // DIv是标量，直接用下标读取当前像素的散度
+    float2 uv = id2UV(id);
+
+    float l = tex2D(inputPressure,uvl);
+    float r = tex2D(inputPressure,uvr);
+    float t = tex2D(inputPressure,uvt);
+    float b = tex2D(inputPressure,uvb);
+
+    float2 c = tex2D(input0,uv);
+
+    output[id] = c - 0.5f*float2(r-l,t-b);
 }
 
 // input0: v0
@@ -122,23 +239,4 @@ void Display (uint2 id : SV_DispatchThreadID)
 
     // 采样源头坐标的值传给当前像素
     outputColor[id] = tex2D(inputColor, distanceUV);
-}
-
-[numthreads(8,8,1)]
-void Divergence (uint2 id : SV_DispatchThreadID)
-{
-    float2 uvl = id2UVL(id);
-    float2 uvr = id2UVR(id);
-    float2 uvt = id2UVT(id);
-    float2 uvb = id2UVB(id);
-
-    float2 uv = id2UV(id);
-
-    float2 l = tex2D(input0,uvl);
-    float2 r = tex2D(input0,uvr);
-    float2 t = tex2D(input0,uvt);
-    float2 b = tex2D(input0,uvb);
-
-    float2 c = tex2D(input0,uv);
-    div[id] = (r.x-l.x+t.y-b.y)/2;
 }

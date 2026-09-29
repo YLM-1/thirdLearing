@@ -32,8 +32,16 @@ public class Chapter6_4 : MonoBehaviour
    private int kernelDivergence;
    [SerializeField] private RenderTexture div;
 
+   private int kernelPressure;
+   [SerializeField] private int pressureIterateCount=20;
+   [SerializeField] private RenderTexture p0;
+   [SerializeField] private RenderTexture p1;
+
+   private int kernelGradient;
+
    //Step:Display
    private int kernelDisplay;
+   //压强贴图（p0/p1）：存的是标量（单纯的挤压程度数值），只需要存 1 个 float，所以格式用 RHalf（单通道）
     [SerializeField] private RenderTexture col0;
    [SerializeField] private RenderTexture col1;
 
@@ -93,6 +101,21 @@ public class Chapter6_4 : MonoBehaviour
         col1 = CreateTexture();
 
         div = CreateTexture(RenderTextureFormat.RHalf);
+
+        p0 = CreateTexture(RenderTextureFormat.RHalf);
+        p1 = CreateTexture(RenderTextureFormat.RHalf);
+
+        ClearTexture(div);
+        ClearTexture(p0);
+        ClearTexture(p1);
+    }
+
+    private void ClearTexture(RenderTexture rt)
+    {
+        RenderTexture prev = RenderTexture.active;
+        RenderTexture.active = rt;
+        GL.Clear(true,true,Color.clear);
+        RenderTexture.active = prev;
     }
 
     private void InitComputeShader()
@@ -102,6 +125,8 @@ public class Chapter6_4 : MonoBehaviour
         kernelDisplay = cs.FindKernel("Display");
         kernelDiffusion = cs.FindKernel("Diffusion");
         kernelDivergence = cs.FindKernel("Divergence");
+        kernelPressure = cs.FindKernel("Pressure");
+        kernelGradient = cs.FindKernel("Gradient");
 
         cs.GetKernelThreadGroupSizes(kernelForce,out uint x,out uint y,out _);
         groupSizeX = Mathf.CeilToInt(texsolution/(float)x);
@@ -192,6 +217,24 @@ public class Chapter6_4 : MonoBehaviour
         cs.SetTexture(kernelDivergence,"input0",v0);
         cs.SetTexture(kernelDivergence,"div",div);
         cs.Dispatch(kernelDivergence,groupSizeX,groupSizeY,1);
+
+        //计算Pressure
+        for(int i = 0;i<pressureIterateCount;i++)
+        {
+            cs.SetTexture(kernelPressure,"inputPressure",p0);
+            cs.SetTexture(kernelPressure,"div",div);
+            cs.SetTexture(kernelPressure,"outputPressure",p1);
+            cs.Dispatch(kernelPressure,groupSizeX,groupSizeY,1);
+            SwapTexture(ref p0,ref p1);
+        }
+
+        //计算Gradient
+        cs.SetTexture(kernelGradient,"input0",v0);
+        cs.SetTexture(kernelGradient,"inputPressure",p0);
+        cs.SetTexture(kernelGradient,"output",v1);
+        cs.Dispatch(kernelGradient,groupSizeX,groupSizeY,1);
+
+        SwapTexture(ref v0,ref v1);
     }
 
     private void Display()
@@ -201,7 +244,7 @@ public class Chapter6_4 : MonoBehaviour
         cs.SetTexture(kernelDisplay,"outputColor",col1);
 
         cs.Dispatch(kernelDisplay,groupSizeX,groupSizeY,1);
-        mat.SetTexture("_BaseMap",div);
+        mat.SetTexture("_BaseMap",col1);
 
         SwapTexture(ref col0,ref col1);
     }

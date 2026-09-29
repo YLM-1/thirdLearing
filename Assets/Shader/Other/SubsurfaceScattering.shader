@@ -157,6 +157,7 @@ Shader "Hidden/SubsurfaceScattering"
 						float3 rNormal = normalize(lerp(normal, lowNormal, _NormalWeight.r));
 						float3 gNormal = normalize(lerp(normal, lowNormal, _NormalWeight.g));
 						float3 bNormal = normalize(lerp(normal, lowNormal, _NormalWeight.b));
+						
 						float rHalfLambert = dot(rNormal, light.direction) * 0.5 + 0.5;
 						float rAngleScattering = tex2D(_AngleScatteringMap, float2(rHalfLambert, curvature)).r;
 						float gHalfLambert = dot(gNormal, light.direction) * 0.5 + 0.5;
