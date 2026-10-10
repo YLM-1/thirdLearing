@@ -8,8 +8,10 @@ public class Chapter6_4SceneManager : MonoBehaviour
   public Chapter6_4 fluid;
   public RenderTexture pressureRT;
   public RenderTexture velocityRT;
+
+  //添加参数来控制水面交互效果
   public RenderTexture reflectionRT;
-  public bool initialized = false;
+  bool initialized = false;
   public float _MaxPoolDisplacement = 2.0f;
 
   Camera cam;
@@ -46,7 +48,7 @@ public class Chapter6_4SceneManager : MonoBehaviour
         pressureRT = fluid.p1;
         velocityRT = fluid.v1;
 
-        reflectionRT = new RenderTexture(cam.pixelHeight,cam.pixelWidth,8);
+        reflectionRT = new RenderTexture(cam.pixelWidth,cam.pixelHeight,24);
         reflectionRT.enableRandomWrite = true;
         reflectionRT.Create();
    }
@@ -68,8 +70,11 @@ public class Chapter6_4SceneManager : MonoBehaviour
        reflectionCam.CopyFrom(cam);
        reflectionCam.targetTexture = reflectionRT;
        reflectionCam.depth = cam.depth-1;
+       // 反射相机不要渲染水面自身，否则会自我采样/黑色自成像
+       reflectionCam.cullingMask = cam.cullingMask & ~(1 << 7);
 
        Shader.SetGlobalTexture("_ReflectionRT",reflectionRT);
+       initialized=true;
    }
 
    private void UpdateReflection()
