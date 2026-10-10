@@ -16,8 +16,8 @@ public class Chapter6_4 : MonoBehaviour
    private int groupSizeY;
    //Step:Force
    private int kernelForce;
-    [SerializeField] private RenderTexture v0;
-   [SerializeField] private RenderTexture v1;
+    [SerializeField] public RenderTexture v0;
+   [SerializeField] public RenderTexture v1;
 
    //Step:Advect
    private int kernelAdvect;
@@ -35,7 +35,7 @@ public class Chapter6_4 : MonoBehaviour
    private int kernelPressure;
    [SerializeField] private int pressureIterateCount=20;
    [SerializeField] private RenderTexture p0;
-   [SerializeField] private RenderTexture p1;
+   [SerializeField] public RenderTexture p1;
 
    private int kernelGradient;
 
