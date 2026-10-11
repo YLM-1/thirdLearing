@@ -14,6 +14,20 @@ public class Chapter6_4SceneManager : MonoBehaviour
   bool initialized = false;
   public float _MaxPoolDisplacement = 2.0f;
 
+  //反射
+  public float reflectionStrength = 1f;
+
+  //折射扰动效果
+  [Range(0,0.5f)]
+  public float depthDensity = 0.1f;
+  public float refractionDistort = 0.01f;
+
+  //焦散效果
+  public Texture testMap;
+  public Camera lightCamera;
+  public float causticIntensity = 50f;
+  public float bottomDepth=10f;
+
   Camera cam;
   Camera reflectionCam;
 
@@ -24,6 +38,8 @@ public class Chapter6_4SceneManager : MonoBehaviour
 
      InitFluid();
      InitReflection();
+     InitRefraction();
+     InitCaustic();
   }
 
   private void Update()
@@ -31,6 +47,7 @@ public class Chapter6_4SceneManager : MonoBehaviour
     if(!initialized)
         return;
     UpdateReflection();
+    UpdateLightCam();
   }
 
   private void InitPool()
@@ -74,7 +91,32 @@ public class Chapter6_4SceneManager : MonoBehaviour
        reflectionCam.cullingMask = cam.cullingMask & ~(1 << 7);
 
        Shader.SetGlobalTexture("_ReflectionRT",reflectionRT);
+       Shader.SetGlobalFloat("_ReflectionStrength",reflectionStrength);
+
        initialized=true;
+   }
+
+   private void InitRefraction()
+   {
+        Shader.SetGlobalFloat("_DepthDensity",depthDensity);
+        Shader.SetGlobalFloat("_RefractionDistort",refractionDistort);
+   }
+
+   private void InitCaustic()
+   {
+     Shader.SetGlobalTexture("_TestMap",testMap);
+     Shader.SetGlobalFloat("_BottomDepth",bottomDepth);
+     Shader.SetGlobalFloat("_CausticIntensity",causticIntensity);
+     UpdateLightCam();
+   }
+
+   //lightCamera 是主相机的子物体，会随手移动，必须每帧更新投影矩阵
+   private void UpdateLightCam()
+   {
+     if (lightCamera == null)
+       return;
+     //焦散的实现就是实现一个decal，作用在水池底部和周围的模型上
+     Shader.SetGlobalMatrix("_LightCamProjMatrix",GL.GetGPUProjectionMatrix(lightCamera.projectionMatrix,true)*lightCamera.worldToCameraMatrix);
    }
 
    private void UpdateReflection()

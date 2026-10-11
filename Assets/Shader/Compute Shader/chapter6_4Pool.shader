@@ -6,11 +6,21 @@ Shader "Unlit/chapter6_4Pool"
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "RenderType"="Transparent" "Queue" = "Transparent"}
         LOD 100
+
+        //用内置的_CameraOpaqueTexture来代替
+        //GrabPass是内置渲染管线的
+        // GrabPass
+        // {
+        //     //抓取屏幕画面，并把它存进一个名为 _RefractionRT 的纹理中
+        //     "_RefractionRT"
+        // }
 
         Pass
         {
+            ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
             Cull Off
             HLSLPROGRAM
             #pragma vertex vert
@@ -31,17 +41,25 @@ Shader "Unlit/chapter6_4Pool"
                 float4 vertex : SV_POSITION;
                 float3 normal : TEXCOORD1;
                 float3 posWS : TEXCOORD2;
-                float4 refCamPos : TEXCOORD3;
+                float4 refCamPos : TEXCOORD3;//采样反射贴图
+                float4 screenPos : TEXCOORD4;
             };
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _PoolColor;
-                float _MaxPoolDisplacement;
-                float _PoolWidth;
-                float _PoolHeight;
-                float4x4 _ReflectionCamProjMatrix;
-                float4 _ReflectionCamPos;
             CBUFFER_END    
+
+            float _MaxPoolDisplacement;
+            float _PoolWidth;
+            float _PoolHeight;
+                
+            float _ReflectionDistort;
+            float _ReflectionStrength;
+            float4x4 _ReflectionCamProjMatrix;
+            float4 _ReflectionCamPos;
+
+            float _RefractionDistort;
+            float _DepthDensity;
 
             TEXTURE2D(_PressureRT);
             SAMPLER(sampler_PressureRT);
@@ -51,6 +69,12 @@ Shader "Unlit/chapter6_4Pool"
 
             TEXTURE2D(_ReflectionRT);
             SAMPLER(sampler_ReflectionRT);
+
+            TEXTURE2D(_CameraOpaqueTexture);
+            SAMPLER(sampler_CameraOpaqueTexture);
+
+            TEXTURE2D(_CameraDepthTexture);
+            SAMPLER(sampler_CameraDepthTexture);
 
             v2f vert (appdata v)
             {
@@ -68,7 +92,11 @@ Shader "Unlit/chapter6_4Pool"
                 o.vertex = TransformWorldToHClip(o.posWS);
 
                 // 反射贴图采集：把世界坐标投影到反射相机的裁剪空间，frag里再除以w
+                //变换目标:反射相机的裁剪空间
                 o.refCamPos = mul(_ReflectionCamProjMatrix, float4(o.posWS,1));
+
+                //变换目标：主相机的屏幕空间
+                o.screenPos = ComputeScreenPos(o.vertex);
                 return o;
             }
 
@@ -121,10 +149,11 @@ Shader "Unlit/chapter6_4Pool"
                 float v2 = SAMPLE_TEXTURE2D(_PressureRT, sampler_PressureRT, uv + dv).r;
 
                 float3 normal = float3(u1-u2,1,v1-v2);
+                normal = normalize(normal);
                 return normal;
             }
 
-            float3 ReflectionColor(v2f i)
+            float3 ReflectionColor(v2f i, float3 normalWS)
             {
                 //i.uv 是模型自己的纹理坐标，来自顶点数据，用来采样模型表面贴的贴图（比如木纹、砖墙）。
                 //它描述的是「这个点在模型表面的哪个位置」，和相机、屏幕、反射没有任何关系。
@@ -134,8 +163,38 @@ Shader "Unlit/chapter6_4Pool"
                 // 平台差异交给 _ProjectionParams.x，不要再额外硬编码翻转
                 if (_ProjectionParams.x < 0)
                     refCamUV.y = 1 - refCamUV.y;
+                // 用扰动后的水面法线偏移采样，让倒影随水波起伏（恢复水面扰动感）
+                refCamUV += normalWS.xz * _ReflectionDistort;
                 float3 reflectionColor = SAMPLE_TEXTURE2D(_ReflectionRT, sampler_ReflectionRT, refCamUV).rgb;
                 return reflectionColor;
+            }
+
+            float3 RefractionColor(v2f i,float3 normalWS)
+            {
+                float2 refractUV = i.screenPos.xy/i.screenPos.w;
+                float3 normalInCam = TransformWorldToViewNormal(normalWS);
+
+                // 折射效果仅在水面之下，才会产生
+                float2 uvOffset = normalInCam.xz * _RefractionDistort;
+
+                //将uvOffset根据normal的变化做一个插值，仅当有压力场变化（normal有变化）的时候，uvOffset才有值
+               uvOffset *= pow(saturate(1 - normalWS.y), 0.1);
+
+                // 首先得到主摄像机空间下的深度值
+                float depth = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_CameraDepthTexture, refractUV+uvOffset).r;
+                float backgroundDepth = LinearEyeDepth(depth, _ZBufferParams);//是将这个非线性的深度值转换成实际的相机空间直线距离（单位通常是米）。
+
+                // 当前水面模型到主摄像机的深度值
+                float surfaceDepth = i.screenPos.w;
+
+                // 使用这两个值做比较，即可得到哪些部分是在水面之上，哪些是在水面之下
+                float depthDifference = step(surfaceDepth , backgroundDepth);
+
+                // 在水面之上的部分是不需要做uv偏移的
+                uvOffset *= depthDifference;
+                                                                                                                        
+                float3 refractionColor = SAMPLE_TEXTURE2D(_CameraOpaqueTexture, sampler_CameraOpaqueTexture, refractUV+uvOffset).rgb;
+                return refractionColor;
             }
 
             float4 frag (v2f i) : SV_Target
@@ -151,7 +210,8 @@ Shader "Unlit/chapter6_4Pool"
 
                 // 法线信息来源于高度图，高度图来源于顶点的高度差，顶点的高度差来源于使用了压力场贴图
                 // float3 normalWS = normalize(i.normal);
-                float3 normalWS = NormalmapFromHeightmap(i.uv);
+                float3 localnormalWS = NormalmapFromHeightmap(i.uv);
+                float3 normalWS = TransformObjectToWorldNormal(localnormalWS);
 
                 float LdotH = saturate(dot(lightDir , halfDir));
                 float NdotL = saturate(dot(normalWS, lightDir));
@@ -169,18 +229,28 @@ Shader "Unlit/chapter6_4Pool"
                 //直接光镜面反射
                 float3 F;
                 float3 directSpecular =DirectLightSpecular(NdotH,VdotH,NdotV,NdotL,roughness,0.001,_PoolColor.rgb,lightColor,F);
-                finalColor.rgb = disneyDiffuse + directSpecular;
+                //水体本身的直接光照（漫反射 + 镜面反射）
+                float3 waterBase = disneyDiffuse + directSpecular;
 
-                //反射效果
-                float3 reflectionColor = ReflectionColor(i);
-                float fresnelMask = saturate(pow(F.r, 0.1));
-                finalColor.rgb = reflectionColor;
+                //折射效果（透过水看到的背景）
+                float3 refractionColor = RefractionColor(i, normalWS);
+                //反射效果（用扰动后的法线去偏移采样，倒影会随水波晃动）
+                float3 reflectionColor = ReflectionColor(i, normalWS);
 
-                // float pressure = SAMPLE_TEXTURE2D(_PressureRT, sampler_PressureRT, i.uv).r;
-                // float2 velocity = SAMPLE_TEXTURE2D(_VelocityRT, sampler_VelocityRT, i.uv).rg;
-                // finalColor.rgb = float3(velocity,0);
+                float2 screenUV = i.screenPos.xy / i.screenPos.w;
+                float rawDepth = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_CameraDepthTexture, screenUV).r;
+                float backgroundDepth = LinearEyeDepth(rawDepth, _ZBufferParams);
+                float surfaceDepth = i.screenPos.w; // 当前水面像素的线性深度
+                float waterThickness = max(backgroundDepth - surfaceDepth, 0.0);
+
+                //折射+waterBase:
+                finalColor.rgb = lerp(refractionColor, waterBase, saturate(waterThickness * _DepthDensity));
+
+                //finalColor+反射：
+                finalColor.rgb = lerp(finalColor.rgb, reflectionColor, _ReflectionStrength);
+
                 return float4(finalColor.rgb,1);
-            }
+                }
             ENDHLSL
         }
     }
