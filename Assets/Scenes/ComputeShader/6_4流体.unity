@@ -1085,7 +1085,7 @@ MonoBehaviour:
   testMap: {fileID: 2800000, guid: c2d32787ef2d49947b43d209c4d99298, type: 3}
   lightCamera: {fileID: 663734676}
   causticIntensity: 50
-  bottomDepth: 10
+  bottomDepth: 100
 --- !u!1 &1207473190
 GameObject:
   m_ObjectHideFlags: 0
@@ -1376,10 +1376,10 @@ MonoBehaviour:
   v0: {fileID: 0}
   v1: {fileID: 0}
   advectSpeed: 1
-  diffusionIterateCount: 20
+  diffusionIterateCount: 10
   viscosity: 0.5
   div: {fileID: 0}
-  pressureIterateCount: 20
+  pressureIterateCount: 10
   p0: {fileID: 0}
   p1: {fileID: 0}
   col0: {fileID: 0}

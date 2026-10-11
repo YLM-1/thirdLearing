@@ -1,0 +1,34 @@
+#pragma kernel CSMain
+
+#include "Header.hlsl"
+#include "BruteForceRayTracing.hlsl"
+#include "Shade.hlsl"
+
+////////////// chapter2_1 //////////////
+RWTexture2D<float4> destination;
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    Ray ray = CreateCameraRay(id.xy);
+
+    ////////////// chapter2_1 //////////////
+    float3 col = 0;
+
+    for(int i = 0;i<_MAX_BOUNCE;i++)
+    {
+        //i=0它的起点是摄像机的位置（Camera Position）。
+        //i=1,2...它的起点是上一次撞击到的物体表面位置（Hit Position）
+        RayHit hit = BruteForceRayTrace(ray);
+
+        //Shade(hit, ray)：根据撞击点的材质（是发光体、粗糙表面还是镜面），计算这里反射出了多少光。
+        // col+=ray.energy*Shade(hit,ray);
+        col+=Shade(hit,ray);
+
+        // // 当光能损失完后，该条光线追踪结束
+        // if(!ray.energy)
+        //    break;
+    }
+
+    destination[id.xy] = float4(col,1);
+}
