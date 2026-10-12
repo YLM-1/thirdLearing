@@ -13,6 +13,9 @@ struct Ray
 {
     float3 origin;
     float3 direction;
+
+    // chapter3_1
+    float3 energy;
 };
 
 struct RayHit
@@ -28,6 +31,8 @@ Ray CreateRay(float3 origin,float3 direction)
     Ray ray;
     ray.origin = origin;
     ray.direction = direction;
+    // chapter3_1
+    ray.energy = 1;//代表光线能量之所以要定义为 float3，是因为光是带有颜色（RGB）的。
     return ray;
 }
 

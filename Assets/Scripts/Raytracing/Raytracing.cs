@@ -10,7 +10,10 @@ public class Raytracing : MonoBehaviour
     ////////////// chapter2_1 //////////////
     public ComputeShader cs;
     public RenderTexture rt;
+    ////////////// chapter2_2 //////////////
     public MeshCollector meshCollector;
+    ////////////// chapter3_1 //////////////
+    public Material skyboxMat;
 
     Camera cam;
     int kernelHandle;
@@ -89,6 +92,9 @@ public class Raytracing : MonoBehaviour
         //把场景里的平面数据绑定到 CSMain 上，否则 Dispatch 会报 planeBuffer 未设置
         if (meshCollector != null)
             meshCollector.Init(cs, kernelHandle);
+
+        ////////////// chapter3_1 //////////////    
+        cs.SetTexture(kernelHandle,"skyBoxCube",skyboxMat.GetTexture("_Tex")); 
     }
 
     private void UpdateParameters()

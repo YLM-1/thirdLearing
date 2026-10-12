@@ -18,22 +18,18 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
     ////////////// chapter2_1 //////////////
     float3 col = 0;
-
     for(int i = 0;i<_MAX_BOUNCE;i++)
     {
-        //i=0它的起点是摄像机的位置（Camera Position）。
-        //i=1,2...它的起点是上一次撞击到的物体表面位置（Hit Position）
         RayHit hit = BruteForceRayTrace(ray);
 
         //Shade(hit, ray)：根据撞击点的材质（是发光体、粗糙表面还是镜面），计算这里反射出了多少光。
-        // col+=ray.energy*Shade(hit,ray);
-        // col+=Shade(hit,ray);
-        col+=hit.normal;
+        col+=ray.energy*Shade(hit,ray);
+        // col+=hit.normal;
 
-
-        // // 当光能损失完后，该条光线追踪结束
-        // if(!ray.energy)
-        //    break;
+        // 当光能损失完后，该条光线追踪结束
+        //any() 用来检查一个向量（Vector）中是否有任意一个分量不为 0（即非零/真）。只要有一个分量大于 0，它就返回 true；如果所有分量全都是 0，它就返回 false
+        if(!any(ray.energy))
+           break;
     }
 
     // col = ray.direction;
