@@ -12,6 +12,7 @@ public class MeshCollector : MonoBehaviour
    public Transform cubeParent;
 
     ////////////// chapter2_2 //////////////
+   Camera cam;
    struct Plane
    {
       public Vector3 position;
@@ -60,6 +61,9 @@ public class MeshCollector : MonoBehaviour
 
    public void Init(ComputeShader cs,int kernelHandle)
    {
+       ////////////// chapter2_3 //////////////
+       cam = Camera.main;
+
        InitPlane(cs,kernelHandle);
 
        ////////////// chapter2_3 //////////////
@@ -79,7 +83,29 @@ public class MeshCollector : MonoBehaviour
 
    private void InitSphere(ComputeShader cs,int kernekHandle)
    {
-       Sphere[] spheres = (from r in sphereParent.GetComponentsInChildren<Renderer>(false) where r.gameObject.activeInHierarchy select new Sphere(r)).ToArray();
+       //进行z轴深度排序
+
+       ////直接通过一行 LINQ 快速筛选并提取出所有的 Sphere，不计算距离，也不进行排序。
+       //Sphere[] spheres = (from r in sphereParent.GetComponentsInChildren<Renderer>(false) where r.gameObject.activeInHierarchy select new Sphere(r)).ToArray();
+       Dictionary<Renderer,float> di = new Dictionary<Renderer, float>();
+       foreach(Renderer r in sphereParent.GetComponentsInChildren<Renderer>(false))
+       {
+          if(!r.gameObject.activeInHierarchy)
+              continue;
+
+          float dist = Vector3.Distance(r.transform.position,cam.transform.position);  
+          di.TryAdd(r,dist);  
+       }
+       //根据距离的远近，由远及近排序，在computeShader中，远物体先画
+       //近处物体后画，则完成z排序，绘制得到正确答案
+       //o => o.Value：这里的 o 代表字典里的每一项,ToDictionary：把这个排好序的列表重新打包恢复成一个标准的字典（Dictionary）。
+       di = di.OrderByDescending(o => o.Value).ToDictionary(o=>o.Key,p=>p.Value);
+
+       Renderer[] rs = di.Keys.ToArray();
+       Sphere[] spheres = new Sphere[di.Keys.Count];
+       for(int i = 0; i<rs.Length;i++)
+          spheres[i] = new Sphere(rs[i]);
+
        sphereBuffer = new ComputeBuffer(spheres.Length,sizeof(float)*4);
        sphereBuffer.SetData(spheres);
 
@@ -89,7 +115,23 @@ public class MeshCollector : MonoBehaviour
 
     private void InitCube(ComputeShader cs,int kernekHandle)
    {
-       Cube[] cubes = (from r in cubeParent.GetComponentsInChildren<Renderer>(false) where r.gameObject.activeInHierarchy select new Cube(r)).ToArray();
+       //进行z轴排序
+       //Cube[] cubes = (from r in cubeParent.GetComponentsInChildren<Renderer>(false) where r.gameObject.activeInHierarchy select new Cube(r)).ToArray();
+
+       Dictionary<Renderer,float> di = new Dictionary<Renderer, float>();
+       foreach(Renderer r in cubeParent.GetComponentsInChildren<Renderer>(false))
+       {
+           if(!r.gameObject.activeInHierarchy)
+              continue;
+           float dist = Vector3.Distance(r.transform.position,cam.transform.position);
+           di.TryAdd(r,dist);   
+       }
+       di = di.OrderByDescending(o => o.Value).ToDictionary(o=>o.Key,p=>p.Value);
+       Renderer[] rs = di.Keys.ToArray();
+       Cube[] cubes = new Cube[rs.Length];
+       for(int i = 0;i<rs.Length;i++)
+           cubes[i] = new Cube(rs[i]);
+       
        cubeBuffer = new ComputeBuffer(cubes.Length,sizeof(float)*6);
        cubeBuffer.SetData(cubes);
 
@@ -100,5 +142,7 @@ public class MeshCollector : MonoBehaviour
    private void OnDestroy() 
    {
        planeBuffer?.Dispose(); 
+       sphereBuffer?.Dispose();
+       cubeBuffer?.Dispose();
    }
 }
