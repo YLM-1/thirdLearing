@@ -6,11 +6,15 @@
 
 ////////////// chapter2_1 //////////////
 RWTexture2D<float4> destination;
+float width;
+float height;
 
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    Ray ray = CreateCameraRay(id.xy);
+    //要将uv转到-1-1
+    float2 uv = id.xy/float2(width,height)*2-1;
+    Ray ray = CreateCameraRay(uv);
 
     ////////////// chapter2_1 //////////////
     float3 col = 0;
@@ -23,12 +27,15 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
         //Shade(hit, ray)：根据撞击点的材质（是发光体、粗糙表面还是镜面），计算这里反射出了多少光。
         // col+=ray.energy*Shade(hit,ray);
-        col+=Shade(hit,ray);
+        // col+=Shade(hit,ray);
+        col+=hit.normal;
+
 
         // // 当光能损失完后，该条光线追踪结束
         // if(!ray.energy)
         //    break;
     }
 
+    // col = ray.direction;
     destination[id.xy] = float4(col,1);
 }
