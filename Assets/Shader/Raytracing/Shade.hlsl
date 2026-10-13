@@ -15,8 +15,14 @@ float3 Shade(RayHit hit,inout Ray ray)
     {
         ray.energy *= WhittedRayTracing(hit,/*inout */ray);
 
-        //return 0只是代表物体表面没有自身发光
-        return 0;
+        // //return 0只是代表物体表面没有自身发光
+        // return 0;
+
+        ////////////// chapter3_3 //////////////
+        if(any(hit.emissionColor))
+           return hit.emissionColor;
+        else
+            return 0;   
     }
     else
     {

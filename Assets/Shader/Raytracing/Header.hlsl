@@ -8,6 +8,11 @@
 float4x4 camera2World;
 float4x4 cameraInverseProjection;
 
+////////////// chapter3_4 //////////////
+float4 lightParameter;  //rgb:direction a:intensity
+float4 lightColor;
+float4 shadowParameter; //rgg:color a:shadowIntensity
+
 ////////////// chapter2_1 //////////////
 struct Ray
 {
@@ -23,6 +28,12 @@ struct RayHit
     float3 position;
     float distance;
     float3 normal;
+    //////////////// chapter3_3 //////////////
+    float3 albedo;
+    float metallic;
+    float smoothness;
+    float transparent;
+    float3 emissionColor;
 };
 
 ////////////// chapter2_1 //////////////
@@ -42,7 +53,7 @@ Ray CreateCameraRay(float2 uv)
     //
     float3 direction = mul(cameraInverseProjection,float4(uv,0,1)).xyz; 
     //
-    direction = mul(camera2World,float4(direction,0)).xyz;
+    direction = normalize(mul(camera2World,float4(direction,0)).xyz);
 
     return CreateRay(origin,direction);
 }

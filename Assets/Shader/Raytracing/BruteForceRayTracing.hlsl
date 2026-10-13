@@ -8,6 +8,12 @@ struct Plane
     float3 position;
     float3 normal;
     float3 size;
+    //////////////// chapter3_3 //////////////
+    float3 albedo;
+    float metallic;
+    float smoothness;
+    float transparent;
+    float3 emissionColor;
 };
 
 StructuredBuffer<Plane> planeBuffer;
@@ -18,6 +24,12 @@ struct Sphere
 {
     float3 center;
     float radius;
+    //////////////// chapter3_3 //////////////
+    float3 albedo;
+    float metallic;
+    float smoothness;
+    float transparent;
+    float3 emissionColor;
 };
 StructuredBuffer<Sphere> sphereBuffer;
 const int sphereCount;
@@ -26,6 +38,12 @@ struct Cube
 {
     float3 min;
     float3 max;
+    //////////////// chapter3_3 //////////////
+    float3 albedo;
+    float metallic;
+    float smoothness;
+    float transparent;
+    float3 emissionColor;
 };
 StructuredBuffer<Cube> cubeBuffer;
 const  int cubeCount;
@@ -45,6 +63,12 @@ void IntersectPlane(Ray ray,Plane plane,inout RayHit hit)
 			hit.distance = t;
             hit.position = p;
             hit.normal = plane.normal;
+            //////////////// chapter3_3 //////////////
+            hit.albedo = plane.albedo;
+            hit.metallic = plane.metallic;
+            hit.smoothness = plane.smoothness;
+            hit.transparent = plane.transparent;
+            hit.emissionColor = plane.emissionColor;
 		}
     }
 }
@@ -69,7 +93,13 @@ void IntersectSphere(Ray ray,Sphere sphere,inout RayHit hit)
     float q = sqrt(sphere.radius*sphere.radius - m*m);
     hit.distance = l-q;
     hit.position = ray.origin + hit.distance*ray.direction;
-    hit.normal = normalize(hit.position - sphere.center); 
+    hit.normal = normalize(hit.position - sphere.center);
+    //////////////// chapter3_3 //////////////
+    hit.albedo = sphere.albedo;
+    hit.metallic = sphere.metallic;
+    hit.smoothness = sphere.smoothness;
+    hit.transparent = sphere.transparent;
+    hit.emissionColor = sphere.emissionColor; 
 }
 
 void IntersectCube(Ray ray,Cube cube,inout RayHit hit)
@@ -97,6 +127,12 @@ void IntersectCube(Ray ray,Cube cube,inout RayHit hit)
     hit.distance = tNear;
     hit.position = ray.origin + tNear * ray.direction;
     hit.normal = normal;
+    //////////////// chapter3_3 //////////////
+    hit.albedo = cube.albedo;
+    hit.metallic = cube.metallic;
+    hit.smoothness = cube.smoothness;
+    hit.transparent = cube.transparent;
+    hit.emissionColor = cube.emissionColor;
 }
 
 ////////////// chapter2_1 //////////////

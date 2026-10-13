@@ -9,11 +9,17 @@ RWTexture2D<float4> destination;
 float width;
 float height;
 
+////////////// chapter3_5 //////////////
+float2 pixelOffset;
+
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    //要将uv转到-1-1
-    float2 uv = id.xy/float2(width,height)*2-1;
+    // //要将uv转到-1-1
+    // float2 uv = id.xy/float2(width,height)*2-1;
+
+    ////////////// chapter3_5 //////////////
+    float2 uv = (id.xy+pixelOffset-0.5f)/float2(width,height)*2-1;
     Ray ray = CreateCameraRay(uv);
 
     ////////////// chapter2_1 //////////////
@@ -23,7 +29,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         RayHit hit = BruteForceRayTrace(ray);
 
         //Shade(hit, ray)：根据撞击点的材质（是发光体、粗糙表面还是镜面），计算这里反射出了多少光。
-        col+=ray.energy*Shade(hit,ray);
+        col+=ray.energy*Shade(hit,ray);//最终颜色 = energy 的连乘 × 最后方向采样到的天空盒颜色。
         // col+=hit.normal;
 
         // 当光能损失完后，该条光线追踪结束
