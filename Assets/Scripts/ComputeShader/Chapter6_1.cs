@@ -36,7 +36,7 @@ public class Chapter6_1 : MonoBehaviour
         public Vector3 position;
         public float lean;
         public float noise;
-        public float trample;
+        public float trample;  //踩踏压扁程度
         public Quaternion quaternion;
 
         public GrassClump(Vector3 pos)
@@ -92,18 +92,20 @@ public class Chapter6_1 : MonoBehaviour
         
         grassCount =(int)(groupSizeX *x);
 
-        argsArray[0] = mesh.GetIndexCount(0);
+        argsArray[0] = mesh.GetIndexCount(0); // 每棵草画多少个索引
         argsArray[1] = (uint)grassCount;
+        //ComputeBufferType.IndirectArguments：这个 buffer 不是普通数据缓冲区，而是专门用来存放"间接绘制/间接计算"参数的特殊缓冲区。
         argsBuffer  = new ComputeBuffer(1,5*sizeof(uint),ComputeBufferType.IndirectArguments);
         argsBuffer.SetData(argsArray);
 
+        //clumpsArray 里每个元素的字段都是默认值（0 或 null）
         clumpsArray = new GrassClump[grassCount];
     }
 
     private void InitDefaultBuffer()
     {
         clumpsBuffer = new ComputeBuffer(grassCount,sizeof(float)*10);
-        clumpsBuffer.SetData(clumpsArray);//此时Buffer为空
+        clumpsBuffer.SetData(clumpsArray);
         cs.SetBuffer(kernelLeanGrass,"clumpsBuffer",clumpsBuffer);
 
         cs.DisableKeyword("UseFrustumCulling");
@@ -111,7 +113,7 @@ public class Chapter6_1 : MonoBehaviour
 
     private void InitPositionsArray()
     {
-        Bounds bounds = terrainPrefab.GetComponent<MeshFilter>().sharedMesh.bounds;
+        Bounds bounds = terrainPrefab.GetComponentInChildren<MeshFilter>().sharedMesh.bounds;
         float yMax = bounds.extents.y+2;
         for(int i=0;i<grassCount;i++)
         {
@@ -278,7 +280,7 @@ public class Chapter6_1 : MonoBehaviour
         Vector3[] points = GetCameraFarClipPlanePoint(cam);
 
         //传的点我们以顺时针传
-        planes[0] = GetPlane(cameraPosition,points[2],points[0]);
+        planes[0] = GetPlane(cameraPosition,points[0],points[0]);
         planes[1] = GetPlane(cameraPosition,points[2],points[3]);
         planes[2] = GetPlane(cameraPosition,points[3],points[1]);
         planes[3] = GetPlane(cameraPosition,points[1],points[0]);
@@ -316,6 +318,7 @@ public class Chapter6_1 : MonoBehaviour
         cs.SetFloat("windScale",windScale);
         cs.SetFloat("time",Time.time);  
 
+        //草地交互相关
         cs.SetVector("tramplePos",character.position);
         cs.SetFloat("trampleRadius",trampleRadius);
     }

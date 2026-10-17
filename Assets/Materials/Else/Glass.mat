@@ -50,5 +50,5 @@ Material:
     - _ThickOffset: 0.032
     m_Colors:
     - _RefractionColor: {r: 1, g: 0.18553454, b: 0.18553454, a: 1}
-    - _SpecularrColor: {r: 0.8113208, g: 0.8113208, b: 0.8113208, a: 1}
+    - _SpecularrColor: {r: 0.72327036, g: 0.68460494, b: 0.68460494, a: 1}
   m_BuildTextureStacks: []

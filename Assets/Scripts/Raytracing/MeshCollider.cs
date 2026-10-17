@@ -61,6 +61,7 @@ public class MeshCollector : MonoBehaviour
       public float transparent;
       public Vector3 emissionColor;
 
+      //Renderer 是 Unity 中所有“可渲染组件”的基类。它本身不能直接挂在物体上用，而是通过它的子类来工作。
       public void Init(Renderer r)
       {
            position = r.transform.position;
@@ -158,7 +159,7 @@ public class MeshCollector : MonoBehaviour
 //    {
 //        //进行z轴深度排序
 
-//        ////直接通过一行 LINQ 快速筛选并提取出所有的 Sphere，不计算距离，也不进行排序。
+//        ////这是 LINQ 查询表达式写法,直接通过一行 LINQ 快速筛选并提取出所有的 Sphere，不计算距离，也不进行排序。
 //        //Sphere[] spheres = (from r in sphereParent.GetComponentsInChildren<Renderer>(false) where r.gameObject.activeInHierarchy select new Sphere(r)).ToArray();
 //        Dictionary<Renderer,float> di = new Dictionary<Renderer, float>();
 //        foreach(Renderer r in sphereParent.GetComponentsInChildren<Renderer>(false))

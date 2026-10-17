@@ -137,13 +137,13 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
                 #endif    
             }
             if(!isIn)
-            return;   
+               return;   
             //接着视锥体裁剪，继续进行hiz遮挡剔除
             #if defined(UseHIZ)
                 //将ndc的aabb坐标从-1,1转到0,1
                 float2 uvLeftBottom = float2(minX,minY)*0.5f+0.5f;
                 float2 uvRightTop = float2(maxX,maxY)*0.5f+0.5f;
-                float depth = maxZ;//DX
+                float depth = maxZ;//DX的Z就是0-1范围
 
                 if(isOpenGL)
                 {
@@ -155,7 +155,7 @@ void LeanGrass (uint3 id : SV_DispatchThreadID)
                 //因为 NDC 空间的总宽度是-1~1，所以 跨度 / 2（即乘以 0.5）才是这个跨度在归一化 UV 空间0~1里的比例。 
                 uint mipmapLevel = (uint)clamp(log2(max(maxX-minX,maxY-minY)*0.5f*depthTextureSize),0,log2(depthTextureSize)-4);
                 //该层mipmapLevel时贴图的大小
-                uint size = depthTextureSize/(1<<mipmapLevel);
+                uint size = depthTextureSize/(1<<mipmapLevel);//1 << mipmapLevel 就是 2 的 mipmapLevel 次方
 
                 //该AABB的左下，右上在该mipmapLevel层级中的位置,size-1
                 uint2 pixelLeftBottom = uint2(clamp(uvLeftBottom.x*size,0,size-1),clamp(uvLeftBottom.y*size,0,size-1));

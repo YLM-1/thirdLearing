@@ -119,12 +119,13 @@ Shader "Unlit/Grass1.0"
             }
 
             [maxvertexcount(_GRASS_SEGMENT*2+1)]
+            //TriangleStream<g2f>: 这是一个模板流对象，专门用来输出三角形流
             void geo(triangle v2g IN[3],inout TriangleStream<g2f> triStream)
             {
                 g2f o;
                 float3 pos = IN[0].vertex.xyz;
 
-                //构建TBN矩阵
+                //构建TBN矩阵，在Object Space中构建TBN矩阵
                 float3 normal = IN[0].normal;
                 float4 tangent = IN[0].tangent;
                 float3 binormal = cross(normal,tangent)*tangent.w;

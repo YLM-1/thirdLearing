@@ -50,9 +50,9 @@ Ray CreateRay(float3 origin,float3 direction)
 Ray CreateCameraRay(float2 uv)
 {
     float3 origin = mul(camera2World,float4(0,0,0,1)).xyz;
-    //
+    //从屏幕空间到摄像机空间
     float3 direction = mul(cameraInverseProjection,float4(uv,0,1)).xyz; 
-    //
+    //从摄像机空间到世界空间
     direction = normalize(mul(camera2World,float4(direction,0)).xyz);
 
     return CreateRay(origin,direction);

@@ -58,15 +58,15 @@ Shader "Myshader/Ocean"
 
 
             // 阴影获取需要的关键字变体
-               #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-               #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
-               #pragma multi_compile _ _IS_NEEDWAVEANIMATION_ON
-               #pragma multi_compile _ _ISNEEDPERLINNOISENORMAL_ON
-               #pragma multi_compile _ _ANIMATION_FLOWMAP _ANIMATION_PERLINNOISE _ANIMATION_GESTERSIN _ANIMATION_FFT
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile _ _IS_NEEDWAVEANIMATION_ON
+            #pragma multi_compile _ _ISNEEDPERLINNOISENORMAL_ON
+            #pragma multi_compile _ _ANIMATION_FLOWMAP _ANIMATION_PERLINNOISE _ANIMATION_GESTERSIN _ANIMATION_FFT
 
-               #pragma shader_feature_local _USE_FLOWMAP
+            #pragma shader_feature_local _USE_FLOWMAP
 
-               #include "OceanMainPass.hlsl"
+            #include "OceanMainPass.hlsl"
 
             ENDHLSL
         }

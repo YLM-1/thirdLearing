@@ -144,7 +144,7 @@ Shader "Unlit/Grass"
     g2f VertexOutPut(float3 origPos,float3 pos,float3 normal,float2 uv,float3x3 mat)
     {
         g2f o;
-        float3 p=mul(mat,pos);
+        float3 p=mul(mat,pos);//TBN空间转换到Object Space
         float3 objectPos = origPos + p;
         o.pos = TransformObjectToHClip(objectPos);
         o.worldNormal = TransformObjectToWorldNormal(mul(mat,normal));
@@ -185,6 +185,7 @@ Shader "Unlit/Grass"
     }
     
     [maxvertexcount(_GRASS_SEGMENTS*2+1)]//单次执行最多会输出多少个顶点。
+     //TriangleStream<g2f>: 这是一个模板流对象，专门用来输出三角形流
     void geo(triangle v2g IN[3], inout TriangleStream<g2f> triStream)
     {
         g2f o;

@@ -107,7 +107,7 @@ Shader "Unlit/Glass"
                 // float2 matcap_uv = float2(reflect.x/m,reflect.y/m)*0.5+0.5;
 
                 //方法三:不推荐
-               // float2 matcap_uv=i.viewNormal.xy*0.5+0.5;������򵥵ģ����������Ч��Ҫ�úܶ�
+               // float2 matcap_uv=i.viewNormal.xy*0.5+0.5;
                 float4 matcap_color=SAMPLE_TEXTURE2D(_Matcap,sampler_Matcap,matcap_uv);
                 matcap_color*=_SpecularrColor;
                 matcap_color.a=matcap_color.r;

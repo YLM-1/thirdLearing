@@ -171,5 +171,5 @@ float4 frag(v2f i):SV_TARGET
     float3 finalColor=lerp(refractColor,reflectColor,reflectionWeight);
 
     finalColor+=specular*light.color.rgb;
-    return float4(finalColor,1.0);
+    return float4(depthFactor.xxx,1.0);
 }

@@ -113,6 +113,7 @@ Shader "Unlit/Chapter6_1"
                 float2 uv : TEXCOORD0;
                 float4 vertex : SV_POSITION;
                 float3 normalWS:TEXCOORD1;
+                //正常来说需要在片元着色器计算这个最好，到你这里就用这个算了
                 float4 shadowCoord : TEXCOORD2;//用于存储阴影采样坐标
             };
 
@@ -128,9 +129,10 @@ Shader "Unlit/Chapter6_1"
                 float4x4 mat2 = createMatrix(clumps.position,clumps.quaternion);
                 //v.vertex = mul(mat2,float4(v.vertex.xyz,1));
 
+                //利用压扁程度来lerp()
                 v.vertex = lerp(mul(mat,float4(v.vertex.xyz,1)),mul(mat2,float4(v.vertex.xyz,1)),clumps.trample);
                 float4 posWS = v.vertex;
-                // v.vertex = mul(mat,float4(v.vertex.xyz,1));
+                // v.vertex = mul(mat,float4(v.vertex.xyz,1));//从模型空间转换到世界空间坐标系
                 o.vertex = TransformWorldToHClip(v.vertex);
                 o.normalWS=TransformObjectToWorldNormal(v.normal);
                 o.uv = v.uv;

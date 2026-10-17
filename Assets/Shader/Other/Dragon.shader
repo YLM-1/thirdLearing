@@ -26,6 +26,11 @@
 	HLSLINCLUDE
 	#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 	#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+	#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+	//URP阴影相关Keyword
+    #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+    #pragma multi_compile _ _SHADOWS_SOFT
 
 	struct appdata
 	{
@@ -61,14 +66,25 @@
 	TEXTURECUBE(_CubeMap);
 	SAMPLER(sampler_CubeMap);
 
-	    float3 RotateAround(float degree,float3 target)
-		{
-			float rad=degree*PI/180;
-			float2x2 m_rotate=float2x2(cos(rad),-sin(rad),sin(rad),cos(rad));
-			float2 reflectDir=mul(m_rotate,target.xz);//绕着y轴旋转
-			target=float3(reflectDir.x,target.y,reflectDir.y);
-			return target;
-		}
+	float3 RotateAround(float degree,float3 target)
+	{
+		float rad=degree*PI/180;
+		float2x2 m_rotate=float2x2(cos(rad),-sin(rad),sin(rad),cos(rad));
+		float2 reflectDir=mul(m_rotate,target.xz);//绕着y轴旋转
+		target=float3(reflectDir.x,target.y,reflectDir.y);
+		return target;
+	}
+
+	v2f vert(appdata v)
+	{
+		v2f o;
+	    o.pos=TransformObjectToHClip(v.vertex.xyz);
+		o.uv=v.uv;
+		o.worldNormal=TransformObjectToWorldNormal(v.normal.xyz);
+		o.worldPos=TransformObjectToWorld(v.vertex.xyz);
+		return o;
+	}
+
 	ENDHLSL
 	  Pass
 	 {
@@ -81,21 +97,12 @@
 		 #pragma vertex vert 
 		 #pragma fragment frag 
 
-		 v2f vert(appdata v)
-		 {
-			 v2f o;
-			 o.pos=TransformObjectToHClip(v.vertex.xyz);
-			 o.uv=v.uv;
-			 o.worldNormal=TransformObjectToWorldNormal(v.normal.xyz);
-			 o.worldPos=TransformObjectToWorld(v.vertex.xyz);
-			 return o;
-		  }
-
 		  float4 frag(v2f i):SV_TARGET
 		  {
 			  float3 worldNormal=normalize(i.worldNormal);
 			  float3 worldViewDir=normalize(_WorldSpaceCameraPos.xyz-i.worldPos.xyz);
-			  Light light=GetMainLight();
+			  float4 shadowCoord = TransformWorldToShadowCoord(i.worldPos);
+			  Light light=GetMainLight(shadowCoord);
 
 			   //漫反射
 			  float diffuse_dot=saturate(dot(worldNormal,light.direction.xyz));
@@ -135,5 +142,24 @@
 		   }
 		 ENDHLSL
 	  }
+	Pass
+	{
+		Name "ShadowCaster"
+		Tags{"LightMode" = "ShadowCaster"}
+
+		ZWrite On
+        ZTest LEqual
+        ColorMask 0
+
+		HLSLPROGRAM
+		#pragma vertex vert
+		#pragma fragment shadowfrag
+
+		float4 shadowfrag(v2f i):SV_TARGET
+		{
+			return 0;
+		}
+		ENDHLSL
+	}
 	}
 }
