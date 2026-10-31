@@ -24,15 +24,19 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _FlowMap:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 991449e5f2e7477499b244f149dd3eab, type: 3}
         m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _FoamTex:
+        m_Texture: {fileID: 2800000, guid: 77c5a5580b13de74cbf04aa136ee9a3e, type: 3}
+        m_Scale: {x: 0.05, y: 0.05}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _NormalTex:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 991449e5f2e7477499b244f149dd3eab, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _WaveNormalMap:
@@ -41,49 +45,57 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _DepthLevel: 0.05
+    - _DepthLevel: 0.0542
     - _DepthOffset: 4.2
-    - _DepthPower: 0.48
+    - _DepthPower: 0.95
     - _DepthRange: 3.4
     - _Distortion: 0.025
-    - _FlowIntensity: 1
+    - _FlowIntensity: 0.86
     - _FlowNormalStrength: 0.5
     - _FlowSpeed: 1
-    - _FoamIntensity: 1.78
-    - _FoamInterval: 1
-    - _FoamPower: 2
-    - _FoamScope: 6
+    - _FoamContrast: 4.34
+    - _FoamCoverage: 1
+    - _FoamCrestHeight: 0.37
+    - _FoamCrestIntensity: 1.59
+    - _FoamCrestScale: 2
+    - _FoamIntensity: 3
+    - _FoamInterval: 4.29
+    - _FoamPower: 5.23
+    - _FoamScope: 9.7
     - _FoamSpeed: 2
-    - _FoamWidth: 1
-    - _FresnelF0: 0.02
+    - _FresnelF0: 0.012
     - _FresnelPower: 5
-    - _GerstnerSpeed: 1
+    - _GerstnerSpeed: 0.44
     - _NormalScale: 1
-    - _RandomDirection: 0.514
-    - _ReflectionDistortion: 0.01
-    - _ReflectionIntensity: 0.417
-    - _RefractionDistortion: 0.02
-    - _SSSDistort: 0.75
-    - _SSSIntensity: 0.36
-    - _SSSPower: 5
-    - _SpecularIntensity: 0.26
-    - _SpecularPower: 5
+    - _RandomDirection: 0.293
+    - _ReflectionDistortion: 0.0234
+    - _ReflectionIntensity: 0.4
+    - _ReflectionRoughness: 0.455
+    - _ReflectionRoughnessDist: 200
+    - _ReflectionRoughnessMax: 4
+    - _RefractionDistortion: 0.0128
+    - _SSSDistort: 0.691
+    - _SSSIntensity: 1
+    - _SSSPower: 1
+    - _SpecularIntensity: 0.65
+    - _SpecularPower: 79
     - _UseFlowMap: 0
     - _WaveCount: 10
-    - _WaveDirection: 1
+    - _WaveDirection: 0.98
     - _WaveNormalIntensity: 1
-    - _WaveSpeed: 0.05
-    - _WavelengthMax: 10
+    - _WaveSpeed: 0.06
+    - _WavelengthMax: 5
     - _WavelengthMin: 1
     - _WavesteepnessMax: 1
     - _WavesteepnessMin: 0
     m_Colors:
     - _DeepColor: {r: 0.03, g: 0.15, b: 0.32, a: 1}
-    - _DepthColor: {r: 0, g: 0.7126744, b: 0.8742138, a: 1}
+    - _DepthColor: {r: 0, g: 0.77622193, b: 0.8745098, a: 1}
     - _Direction: {r: 1, g: 0, b: 0, a: 0}
     - _FoamColor: {r: 1, g: 1, b: 1, a: 1}
-    - _SSSColor: {r: 0.99371064, g: 0.99371064, b: 0.99371064, a: 1}
-    - _ShallowColor: {r: 0, g: 0.8987341, b: 1, a: 0.45}
-    - _WaterSpecularColor: {r: 0.8238993, g: 0.73321855, b: 0.73321855, a: 1}
+    - _FoamFlow: {r: 0, g: 0, b: 0, a: 0}
+    - _SSSColor: {r: 1, g: 1, b: 1, a: 1}
+    - _ShallowColor: {r: 0.35534585, g: 1, b: 0.82187194, a: 0.45}
+    - _WaterSpecularColor: {r: 1, g: 1, b: 1, a: 1}
     - _WaveDirection: {r: 1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []

@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
@@ -908,13 +908,13 @@ public class Chapter6_3 : MonoBehaviour
                     RigidBodyForce force = forces[i];
 
                     int rigidbodyIndex = force.index;
-                    // ��˸�������˲ʱ�ٶȱ仯��������������
-                    // ͨ��һ�κ�������˲ʱʩ�Ӵ��ٶȱ仯���� ForceMode.Impulse ��ͬ����������������Σ�VelocityChange ��������ÿ��������ٶȡ�
-                    // ���ڲ�������������Ķ��󣬴�ģʽ�ǳ����á� �ڴ�ģʽ�£�ʩ���ڴ˸�����������ĵ�λΪ������ / ʱ�䡣
+                    // 对这个刚体施加瞬时冲量
+                    // ForceMode.Impulse：一次性施加冲量，立即改变速度；效果受刚体质量影响。
+                    // 适合爆炸、碰撞等瞬时力场景。
 
-                    // ��˸�������˲ʱ�������������������
-                    // ͨ��һ�κ�������˲ʱʩ�Ӵ˳��������ģʽȡ���ڸ������������ˣ��������ϸߵĶ���Ҫ�����������ϵ͵Ķ���ͬ���ƶ���ŤתЧ��������ʩ�Ӹ��������
-                    // ����ʩ��˲ʱ�������������籬ը����ײ������������ģʽ�ǳ����á� �ڴ�ģʽ�£�ʩ���ڴ˸�����������ĵ�λΪ������* ����/ ʱ�䡣
+                    // 如果需要忽略质量、直接改变速度，可以改用 ForceMode.VelocityChange。
+                    // VelocityChange 不受刚体质量影响，单位是“速度 / 时间”。
+                    // 当前代码使用 Impulse，因此这里保留两种模式的说明，方便后续切换测试。
                     if(rigidBodyDic.TryGetValue(rigidbodyIndex,out Rigidbody targetRigidbody))
                         targetRigidbody.AddForce(force.force, ForceMode.Impulse);
                 }

@@ -44,6 +44,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
       ball.position.y = clamp(ball.position.y,boundMin.y,boundMax.y);
       //ball.velocity.y = -ball.velocity.y;
       //step3:添加阻尼
+      //如果只在y方向添加阻尼，那么我的这个小球xz方向将永远有速度
       ball.velocity = -ball.velocity*damping;
    }
 
@@ -64,6 +65,8 @@ void CSMain (uint3 id : SV_DispatchThreadID)
        //当两个球体相交，则需要计算球体之间的挤开运动
        if(dist<2*radius)
        {
+         //总穿透深度 = 应相距的距离-实际相距的距离 = 2*radius-distance
+         //但是反弹是两个球的事，双方各退一半所以=radius - 0.5*distance
           direction*=radius-0.5*dist;
           ball.position+=direction;
 

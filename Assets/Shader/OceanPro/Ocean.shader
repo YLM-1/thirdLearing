@@ -6,7 +6,12 @@ Shader "Unlit/Ocean"
         _ReflectionIntensity("ReflectionIntensity",Range(0,1))=0.5
         _ReflectionDistortion("ReflectionDistortion",Range(0,0.1))=0.05
         _FresnelF0("Fresnel F0",Range(0,1))=0.02
-        _FresnelPower("Fresnel Power",Float)=5
+        _FresnelPower("FresnelPower",Range(1,10))=5
+
+        [Header(Reflection Roughness)]
+        _ReflectionRoughness("Roughness",Range(0,1))=0.15
+        _ReflectionRoughnessDist("Roughness Distance",Float)=200
+        _ReflectionRoughnessMax("Roughness Max LOD",Range(0,6))=4
 
         [Header(Refraction)]
         _DepthPower("_DepthPower",Float)=5
@@ -28,7 +33,7 @@ Shader "Unlit/Ocean"
         _WaveDirection("Wave Direction",Float)=1
 
         [Header(Specular)]
-        _SpecularPower("SpecularPower",Float)=5
+        _SpecularPower("SpecularPower",Range(1,512))=60
         _SpecularIntensity("SpecularIntensity",Range(0,2))=1
         _WaterSpecularColor("WaterSpecularColor",Color)=(1,1,1,1)
 
@@ -43,12 +48,18 @@ Shader "Unlit/Ocean"
 
         [Header(Foam)]
         _FoamColor("Foam Color",Color)=(1,1,1,1)
-        _FoamScope("Foam Scope",Float)=1.7
-        _FoamPower("Foam Power",Float)=5
-        _FoamIntensity("Foam Intensity",Range(0,2))=1
-        _FoamInterval("Foam Interval",Float)=6
-        _FoamWidth("Foam Width",Float)=0.1
-        _FoamSpeed("Foam Speed",Float)=0.1
+        _FoamTex("Foam Texture",2D)="white"{}
+        _FoamContrast("Foam Contrast",Range(0,8))=2
+        _FoamCoverage("Foam Coverage",Range(0,1))=0.2
+        _FoamFlow("Foam Flow (UV/s)",Vector)=(0.01,0.015,0,0)
+        _FoamScope("Foam Scope (m)",Range(0,50))=6
+        _FoamPower("Foam Power",Range(1,8))=2
+        _FoamIntensity("Foam Intensity",Range(0,3))=1.78
+        _FoamCrestHeight("Foam Crest Height (m)",Range(0,1.5))=0.2
+        _FoamCrestScale("Foam Crest Scale",Range(0,20))=8
+        _FoamCrestIntensity("Foam Crest Intensity",Range(0,2))=0.8
+        _FoamInterval("Foam Interval",Float)=1
+        _FoamSpeed("Foam Speed",Float)=2
 
         [Header(Gerstner)]
         _WaveCount("Wave Count",Float)=10
@@ -81,6 +92,7 @@ Shader "Unlit/Ocean"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
 
 
             // 阴影获取需要的关键字变体
@@ -93,5 +105,4 @@ Shader "Unlit/Ocean"
             ENDHLSL
         }
     }
-    CustomEditor "Scarecrow.SimpleShaderGUI"
 }

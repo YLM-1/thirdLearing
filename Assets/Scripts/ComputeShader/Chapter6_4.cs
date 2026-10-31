@@ -150,7 +150,7 @@ public class Chapter6_4 : MonoBehaviour
             curPos = hitInfo.textureCoord;
         }
         else
-             curPos = lastPos;
+            curPos = lastPos;
         return curPos;     
     }
 

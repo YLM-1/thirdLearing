@@ -13,6 +13,9 @@ float4 lightParameter;  //rgb:direction a:intensity
 float4 lightColor;
 float4 shadowParameter; //rgg:color a:shadowIntensity
 
+////////////// chapter4_1 //////////////
+static const float EPSILON = 1e-8;
+
 ////////////// chapter2_1 //////////////
 struct Ray
 {

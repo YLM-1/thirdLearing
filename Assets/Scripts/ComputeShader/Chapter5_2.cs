@@ -5,7 +5,7 @@ using UnityEngine;
 public class Chapter5_2 : MonoBehaviour
 {
 
-    //RigidBody 决定了整体怎么动，
+    //RigidBody 决定了整体怎么动
     // 而 Particle 则是将刚体的宏观运动分解到了微观的具体空间点上
    struct RigidBody
    {

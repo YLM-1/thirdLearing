@@ -1,0 +1,55 @@
+#pragma kernel Calculate
+
+#include "Constants.hlsl"
+
+////////////// chapter4_4 //////////////
+    //1.构造AABB
+    ByteAddressBuffer indexBuffer;
+    ByteAddressBuffer vertexBuffer;
+    RWStructuredBuffer<AABB> aabbBuffer;
+
+    const int trianglesCount;
+
+    //2.计算morton code
+    float3 encompassingAABBMin;
+    float3 encompassingAABBMax;
+    RWStructuredBuffer<uint> mortonCodeBuffer;  
+
+////////////// chapter4_4 //////////////
+void LoadVertex(uint index,out float3 position,out float3 normal,out float3 tangent,out float2 uv)   
+{
+    uint pi = index*11*4;//index* (3[position.xyz] + 3[normal.xyz] + 3[tangent.xyz] + 2[uv.xy]) * 4[bytes]
+    uint ni = pi+3*4;
+    uint ti = pi+6*4;
+    uint uvi = pi+9*4;
+
+    //Load读出来是uint,但是position,normal,tangent都是float的数据
+    position = asfloat(vertexBuffer.Load3(pi));
+    normal = asfloat(vertexBuffer.Load3(ni));
+    tangent = asfloat(vertexBuffer.Load3(ti));
+	uv = asfloat(vertexBuffer.Load2(uvi));
+} 
+
+[numthreads(THREADS_PER_BLOCK,1,1)]
+void Calculate (uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+{
+    const uint id = gid.x * THREADS_PER_BLOCK + tid.x;
+    if(id >= trianglesCount)
+       return;
+
+    AllMemoryBarrierWithGroupSync();  
+
+    // 读取顶点索引
+    uint3 triIndex = indexBuffer.Load3(id*3*4);//id*3*(triangle.vertices)*4[byte]
+
+    //读取顶点position
+    float3 p0,n0,t0,p1,n1,t1,p2,n2,t2;
+    float2 uv0,uv1,uv2;
+    LoadVertex(triIndex.x, /*out*/p0, /*out*/n0, /*out*/t0, /*out*/uv0);
+	LoadVertex(triIndex.y, /*out*/p1, /*out*/n1, /*out*/t1, /*out*/uv1);
+	LoadVertex(triIndex.z, /*out*/p2, /*out*/n2, /*out*/t2, /*out*/uv2);
+
+    //构造AABB
+    AABB aabb = (AABB)0;
+    aabb.min
+}

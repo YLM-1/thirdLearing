@@ -87,6 +87,7 @@ public class Chapter5_1 : MonoBehaviour
 
     private void InitMaterial()
     {
+        //创建一个新的材质
         ballMat = new Material(Shader.Find("Unlit/Chapter5_1"));
         ballMat.SetBuffer("ballBuffer",ballBuffer);
     }
