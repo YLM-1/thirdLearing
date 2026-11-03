@@ -8,23 +8,31 @@ public class Chapter6_4SceneManager : MonoBehaviour
   public Chapter6_4 fluid;
   public RenderTexture pressureRT;
   public RenderTexture velocityRT;
+  [Range(0,1f)]
+  public float flowStrength=0.5f;
 
   //添加参数来控制水面交互效果
   public RenderTexture reflectionRT;
   bool initialized = false;
-  public float _MaxPoolDisplacement = 2.0f;
+  public float _MaxPoolDisplacement = 2.0f;//控制水面的顶点位移
 
   //反射
+  [Range(0,1f)]
   public float reflectionStrength = 1f;
+  [Range(0f, 0.2f)]
+  public float reflectionDistort = 0.03f;
 
   //折射扰动效果
-  [Range(0,0.5f)]
+  [Range(0,0.1f)]
   public float depthDensity = 0.1f;
   public float refractionDistort = 0.01f;
 
   //焦散效果
   public Texture testMap;
   public Camera lightCamera;
+  public Light sunLight;
+  [Tooltip("焦散光相机的正交尺寸；<= 0 时按水面 bounds 自动计算")]
+  public float causticOrthoSize = 0f;
   public float causticIntensity = 50f;
   public float bottomDepth=10f;
 
@@ -38,21 +46,28 @@ public class Chapter6_4SceneManager : MonoBehaviour
 
      InitFluid();
      InitReflection();
-     InitRefraction();
-     InitCaustic();
+     InitCausticCamera();
+     UpdateShaderGlobals();
+     UpdateReflection();
+     UpdateLightCam();
+
+     initialized = true;
   }
 
   private void Update()
   {
     if(!initialized)
         return;
+
+    EnsureReflectionTexture();
+    UpdateShaderGlobals();
     UpdateReflection();
     UpdateLightCam();
   }
 
   private void InitPool()
   {
-       fluid = poolGO.GetComponent<Chapter6_4>();
+      fluid = poolGO.GetComponent<Chapter6_4>();
   }
 
    IEnumerator InitRenderTextures()
@@ -65,18 +80,79 @@ public class Chapter6_4SceneManager : MonoBehaviour
         pressureRT = fluid.p1;
         velocityRT = fluid.v1;
 
-        reflectionRT = new RenderTexture(cam.pixelWidth,cam.pixelHeight,24);
-        reflectionRT.enableRandomWrite = true;
+        int reflectionWidth = Mathf.Max(1, cam.pixelWidth / 2);
+        int reflectionHeight = Mathf.Max(1, cam.pixelHeight / 2);
+
+        reflectionRT = new RenderTexture(
+            reflectionWidth,
+            reflectionHeight,
+            24,
+            RenderTextureFormat.DefaultHDR);
+        reflectionRT.wrapMode = TextureWrapMode.Clamp;
+        reflectionRT.filterMode = FilterMode.Bilinear;
         reflectionRT.Create();
+   }
+
+   private void EnsureReflectionTexture()
+   {
+        if (cam.pixelWidth <= 0 || cam.pixelHeight <= 0)
+            return;
+
+        int w = Mathf.Max(1, cam.pixelWidth / 2);
+        int h = Mathf.Max(1, cam.pixelHeight / 2);
+
+        if (reflectionRT != null && reflectionRT.width == w && reflectionRT.height == h)
+            return;
+
+        if (reflectionRT != null)
+            reflectionRT.Release();
+
+        reflectionRT = new RenderTexture(w, h, 24, RenderTextureFormat.DefaultHDR);
+        reflectionRT.wrapMode = TextureWrapMode.Clamp;
+        reflectionRT.filterMode = FilterMode.Bilinear;
+        reflectionRT.Create();
+
+        if (reflectionCam != null)
+            reflectionCam.targetTexture = reflectionRT;
+
+        Shader.SetGlobalTexture("_ReflectionRT", reflectionRT);
+   }
+
+   private void UpdateShaderGlobals()
+   {
+        Shader.SetGlobalFloat("_MaxPoolDisplacement", _MaxPoolDisplacement);
+        Shader.SetGlobalFloat("_PoolWidth", pressureRT.width);
+        Shader.SetGlobalFloat("_PoolHeight", pressureRT.height);
+        Shader.SetGlobalFloat("_FlowStrength", flowStrength);
+
+        // 压力场的世界 XZ 映射范围（水面和水面下的池底共用）
+        if (poolGO != null)
+        {
+            Renderer waterRenderer = poolGO.GetComponentInChildren<Renderer>();
+            if (waterRenderer != null)
+            {
+                Bounds b = waterRenderer.bounds;
+                Shader.SetGlobalVector("_WaterMinXZ", new Vector4(b.min.x, b.min.z, 0f, 0f));
+                Shader.SetGlobalVector("_WaterSizeXZ", new Vector4(Mathf.Max(b.size.x, 1e-6f), Mathf.Max(b.size.z, 1e-6f), 0f, 0f));
+            }
+        }
+
+        Shader.SetGlobalFloat("_ReflectionStrength", reflectionStrength);
+        Shader.SetGlobalFloat("_ReflectionDistort", reflectionDistort);
+
+        Shader.SetGlobalFloat("_DepthDensity", depthDensity);
+        Shader.SetGlobalFloat("_RefractionDistort", refractionDistort);
+
+        Shader.SetGlobalFloat("_BottomDepth", bottomDepth);
+        Shader.SetGlobalFloat("_CausticIntensity", causticIntensity);
+        Shader.SetGlobalTexture("_TestMap", testMap);
    }
    
    private void InitFluid()
    {
+        // RT 引用只设置一次；ComputeShader 每帧写入同一批 RT，所以水面采样是实时的
         Shader.SetGlobalTexture("_PressureRT", pressureRT);
         Shader.SetGlobalTexture("_VelocityRT", velocityRT);
-        Shader.SetGlobalFloat("_MaxPoolDisplacement",_MaxPoolDisplacement);
-        Shader.SetGlobalFloat("_PoolWidth",cam.pixelWidth);
-        Shader.SetGlobalFloat("_PoolHeight",cam.pixelHeight);
    }
 
    private void InitReflection()
@@ -86,37 +162,99 @@ public class Chapter6_4SceneManager : MonoBehaviour
 
        reflectionCam.CopyFrom(cam);
        reflectionCam.targetTexture = reflectionRT;
-       reflectionCam.depth = cam.depth-1;
-       // 反射相机不要渲染水面自身，否则会自我采样/黑色自成像
-       reflectionCam.cullingMask = cam.cullingMask & ~(1 << 7);
+       reflectionCam.depth = cam.depth - 1;
+
+       reflectionCam.allowMSAA = false;
+       reflectionCam.allowHDR = true;
+
+       // 反射相机不要渲染水面自身，否则会自我采样/黑色自成像。
+       // 这里把 poolGO 下所有 Renderer 都归到 Fluid 层，防止 FBX 子节点仍留在 Default 层。
+       const int fluidLayer = 7;
+       foreach (var r in poolGO.GetComponentsInChildren<Renderer>(true))
+           r.gameObject.layer = fluidLayer;
+
+       reflectionCam.cullingMask = cam.cullingMask & ~(1 << fluidLayer);
 
        Shader.SetGlobalTexture("_ReflectionRT",reflectionRT);
-       Shader.SetGlobalFloat("_ReflectionStrength",reflectionStrength);
-
-       initialized=true;
    }
 
-   private void InitRefraction()
+   // 焦散光相机：不要挂在主相机下，应该固定在世界里、沿平行光方向投影
+   private void InitCausticCamera()
    {
-        Shader.SetGlobalFloat("_DepthDensity",depthDensity);
-        Shader.SetGlobalFloat("_RefractionDistort",refractionDistort);
+       if (lightCamera == null)
+           return;
+
+       if (sunLight == null)
+       {
+           sunLight = RenderSettings.sun;
+           if (sunLight == null)
+           {
+               foreach (var l in FindObjectsOfType<Light>())
+               {
+                   if (l.type == LightType.Directional)
+                   {
+                       sunLight = l;
+                       break;
+                   }
+               }
+           }
+       }
+
+       if (sunLight == null)
+       {
+           Debug.LogWarning("[Caustic] 没找到 Directional Light，焦散投影会沿用当前 lightCamera 的朝向。");
+           return;
+       }
+
+       // 从主相机下移出来，避免光相机跟着视线移动
+       lightCamera.transform.SetParent(null, true);
+       lightCamera.enabled = false;
+       lightCamera.orthographic = true;
+       lightCamera.nearClipPlane = 0.3f;
+       lightCamera.farClipPlane = 1000f;
+       lightCamera.aspect = cam.aspect;
+
+       if (causticOrthoSize > 0.01f)
+       {
+           lightCamera.orthographicSize = causticOrthoSize;
+       }
+       else
+       {
+           var waterRenderer = poolGO != null ? poolGO.GetComponent<Renderer>() : null;
+           if (waterRenderer != null)
+           {
+               Bounds b = waterRenderer.bounds;
+               lightCamera.orthographicSize = Mathf.Max(b.size.x, b.size.z) * 0.5f * 1.1f;
+               Debug.Log($"[Caustic] 自动 orthoSize={lightCamera.orthographicSize:F2}，水面 bounds={b.size}");
+           }
+           else
+           {
+               lightCamera.orthographicSize = 15.14f;
+           }
+       }
+
+       UpdateLightCamTransform();
    }
 
-   private void InitCaustic()
+   private void UpdateLightCamTransform()
    {
-     Shader.SetGlobalTexture("_TestMap",testMap);
-     Shader.SetGlobalFloat("_BottomDepth",bottomDepth);
-     Shader.SetGlobalFloat("_CausticIntensity",causticIntensity);
-     UpdateLightCam();
+       if (lightCamera == null || sunLight == null)
+           return;
+
+       // 光相机放在平行光的位置、朝向和光一致
+       lightCamera.transform.position = sunLight.transform.position;
+       lightCamera.transform.rotation = sunLight.transform.rotation;
    }
 
-   //lightCamera 是主相机的子物体，会随手移动，必须每帧更新投影矩阵
    private void UpdateLightCam()
    {
-     if (lightCamera == null)
-       return;
-     //焦散的实现就是实现一个decal，作用在水池底部和周围的模型上
-     Shader.SetGlobalMatrix("_LightCamProjMatrix",GL.GetGPUProjectionMatrix(lightCamera.projectionMatrix,true)*lightCamera.worldToCameraMatrix);
+       if (lightCamera == null)
+           return;
+
+       UpdateLightCamTransform();
+
+       //焦散的实现就是实现一个decal，作用在水池底部和周围的模型上
+       Shader.SetGlobalMatrix("_LightCamProjMatrix", GL.GetGPUProjectionMatrix(lightCamera.projectionMatrix, true) * lightCamera.worldToCameraMatrix);
    }
 
    private void UpdateReflection()
@@ -153,8 +291,12 @@ public class Chapter6_4SceneManager : MonoBehaviour
        //此时已经计算好position和rotation，接下来计算oblique matrix;
 
        //将水池模型的position转换到反射相机空间
+       Vector3 worldNormal = poolGO.transform.up;
+       if (Vector3.Dot(cam.transform.position - poolGO.transform.position, worldNormal) < 0f)
+           worldNormal = -worldNormal;
+
        Vector3 poolPosInCameraSpace = reflectionCam.worldToCameraMatrix.MultiplyPoint(poolGO.transform.position);
-       Vector3 poolNormalInCameraSpace = reflectionCam.worldToCameraMatrix.MultiplyVector(poolGO.transform.up);
+       Vector3 poolNormalInCameraSpace = reflectionCam.worldToCameraMatrix.MultiplyVector(worldNormal);
 
        //构建近裁剪平面，平面方程dot(n,p-p0),float4(x,y,z,-dot(n,p))
        float np = -Vector3.Dot(poolNormalInCameraSpace,poolPosInCameraSpace);
@@ -166,5 +308,17 @@ public class Chapter6_4SceneManager : MonoBehaviour
        //传递给shader的接口需要是世界空间，而非相机空间
        Shader.SetGlobalMatrix("_ReflectionCamProjMatrix",GL.GetGPUProjectionMatrix(reflectionCam.projectionMatrix,true)*reflectionCam.worldToCameraMatrix);
        Shader.SetGlobalVector("_ReflectionCamPos",reflectionCam.transform.position);
+   }
+
+   private void OnDestroy()
+   {
+       if (reflectionRT != null)
+       {
+           reflectionRT.Release();
+           Destroy(reflectionRT);
+       }
+
+       if (reflectionCam != null)
+           Destroy(reflectionCam.gameObject);
    }
 }

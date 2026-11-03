@@ -173,7 +173,7 @@ void Pressure (uint2 id : SV_DispatchThreadID)
     float2 uvt = id2UVT(id);
     float2 uvb = id2UVB(id);
 
-    // DIv是标量，直接用下标读取当前像素的散度
+    // Div是标量，直接用下标读取当前像素的散度
     float c = div[id];
 
 
@@ -213,7 +213,7 @@ void Gradient (uint2 id : SV_DispatchThreadID)
     float2 uvt = id2UVT(id);
     float2 uvb = id2UVB(id);
 
-    // DIv是标量，直接用下标读取当前像素的散度
+    // Div是标量，直接用下标读取当前像素的散度
     float2 uv = id2UV(id);
 
     float l = tex2D(inputPressure,uvl);

@@ -6,7 +6,7 @@ using UnityEngine;
 public class Chapter6_4 : MonoBehaviour
 {
    [SerializeField] private ComputeShader cs;
-   [SerializeField] private int texsolution = 1024;
+   [SerializeField] private int texsolution = 1024; // 运行时修改不会重建 RT，仅 Start 生效
    [SerializeField] private Texture2D texture;
    [SerializeField] private Camera cam;
    [SerializeField] private LayerMask fluidLayer;
@@ -57,16 +57,19 @@ public class Chapter6_4 : MonoBehaviour
         Graphics.Blit(texture,col0);
     }
 
-    private void OnValidate()
+    private void PushComputeParams()
     {
-        cs.SetFloat("radius",radius);
-        cs.SetFloat("advectSpeed",advectSpeed);
-
-        cs.SetFloat("viscosity",viscosity);
+        // 运行时每帧推送，确保 Inspector 里的调整立即生效；
+        // 同时避免 OnValidate 在打包后不执行导致这些值为 0。
+        cs.SetFloat("radius", Mathf.Max(radius, 1e-6f));
+        cs.SetFloat("advectSpeed", advectSpeed);
+        cs.SetFloat("viscosity", Mathf.Max(viscosity, 1e-6f));
     }
 
     private void Update()
     {
+        PushComputeParams();
+
         //Step1:外力Force;
         ExternalForce();
 
@@ -146,11 +149,18 @@ public class Chapter6_4 : MonoBehaviour
 
         if(Physics.Raycast(ray,out RaycastHit hitInfo,100f,fluidLayer))
         {
-            //hitInfo.textureCoord 返回的是碰撞点在网格（Mesh）上的 UV 坐标，取值范围通常在 0-1之间。
-            curPos = hitInfo.textureCoord;
+            // 用世界 XZ + 水面 bounds 计算 UV，和 shader 里的 pressureUV 保持一致
+            Renderer rend = GetComponentInChildren<Renderer>();
+            Bounds b = rend != null ? rend.bounds : new Bounds(Vector3.zero, Vector3.one);
+            Vector3 p = hitInfo.point;
+
+            float u = b.size.x > 1e-6f ? (p.x - b.min.x) / b.size.x : 0f;
+            float v = b.size.z > 1e-6f ? (p.z - b.min.z) / b.size.z : 0f;
+
+            curPos = new Vector3(Mathf.Clamp01(u), Mathf.Clamp01(v), 0f);
         }
         else
-            curPos = lastPos;
+             curPos = lastPos;
         return curPos;     
     }
 
@@ -244,7 +254,7 @@ public class Chapter6_4 : MonoBehaviour
         cs.SetTexture(kernelDisplay,"outputColor",col1);
 
         cs.Dispatch(kernelDisplay,groupSizeX,groupSizeY,1);
-        mat.SetTexture("_BaseMap",col1);
+        mat.SetTexture("_BaseMap",col0);
 
         SwapTexture(ref col0,ref col1);
     }
