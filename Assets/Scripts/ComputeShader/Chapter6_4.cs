@@ -197,6 +197,23 @@ public class Chapter6_4 : MonoBehaviour
         SwapTexture(ref v0,ref v1);
         lastPos = curPos;
     }
+
+    public void ExternalForce(Vector3 forcePos, Vector3 forceVector)
+    {
+
+        cs.SetVector("forcePos",forcePos);
+        cs.SetVector("forceVector",forceVector);
+
+        cs.SetTexture(kernelForce,"input0",v0);
+        cs.SetTexture(kernelForce,"output",v1);
+        cs.SetFloat("deltaTime",Time.deltaTime);
+
+        cs.Dispatch(kernelForce,groupSizeX,groupSizeY,1);
+
+        //ref 关键字用于按引用传递参数
+        SwapTexture(ref v0,ref v1);
+        lastPos = curPos;
+    }
     private void Advect()
     {
         cs.SetTexture(kernelAdvect,"input0",v0);

@@ -13,13 +13,21 @@ float boidCount;
 float deltatime;
 float3 flockPosition;
 
+// 水池边界 + 上下弹性
+float3 poolMin;
+float3 poolMax;
+float  usePool;
+float  poolSpring;
+float  poolDamping;
+float  poolBounce;
+
 float alignmentWeight;
 float cohesionWeight;
 float separationWeight;
 
 RWStructuredBuffer<Boid> boidBuffer;
 
-[numthreads(256,1,1)]
+[numthreads(8,1,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
     Boid thisBoid = boidBuffer[id.x];
@@ -62,7 +70,33 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
     float3 avgWeight = alignment*alignmentWeight+cohesion*cohesionWeight+separation*separationWeight;
     thisBoid.direction = lerp(avgWeight,normalize(thisBoid.direction),0.95);
+
+    // ── 上下弹性 ──
+    // 每条鱼有自己的舒适高度（用 id.x 哈希），避免所有鱼都挤在同一层
+    if (usePool > 0.5)
+    {
+        float range = max(poolMax.y - poolMin.y, 1e-4);
+        float homeY = poolMin.y + (frac((float)id.x * 0.6180339) * 0.8 + 0.1) * range;
+
+        // 弹簧 + 阻尼，只作用在竖直方向，不影响水平集群
+        //弹簧：把鱼拉向自己的目标深度。
+        thisBoid.direction.y += (homeY - thisBoid.position.y) * poolSpring * deltatime;
+        //阻尼：减小上下振荡，让运动更平稳
+        thisBoid.direction.y *= (1.0 - saturate(poolDamping * deltatime));
+    }
+
     thisBoid.position += thisBoid.direction*boidSpeed*deltatime;
+
+    // ── 硬边界 + 反弹：无论前面算出什么，都不会游出水池 ──
+    if (usePool > 0.5)
+    {
+        if (thisBoid.position.x < poolMin.x) { thisBoid.position.x = poolMin.x; thisBoid.direction.x =  abs(thisBoid.direction.x) * poolBounce; }
+        if (thisBoid.position.x > poolMax.x) { thisBoid.position.x = poolMax.x; thisBoid.direction.x = -abs(thisBoid.direction.x) * poolBounce; }
+        if (thisBoid.position.y < poolMin.y) { thisBoid.position.y = poolMin.y; thisBoid.direction.y =  abs(thisBoid.direction.y) * poolBounce; }
+        if (thisBoid.position.y > poolMax.y) { thisBoid.position.y = poolMax.y; thisBoid.direction.y = -abs(thisBoid.direction.y) * poolBounce; }
+        if (thisBoid.position.z < poolMin.z) { thisBoid.position.z = poolMin.z; thisBoid.direction.z =  abs(thisBoid.direction.z) * poolBounce; }
+        if (thisBoid.position.z > poolMax.z) { thisBoid.position.z = poolMax.z; thisBoid.direction.z = -abs(thisBoid.direction.z) * poolBounce; }
+    }
 
     boidBuffer[id.x] = thisBoid;
 }

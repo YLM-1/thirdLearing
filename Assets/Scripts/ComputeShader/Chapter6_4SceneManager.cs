@@ -39,6 +39,9 @@ public class Chapter6_4SceneManager : MonoBehaviour
   Camera cam;
   Camera reflectionCam;
 
+  [SerializeField] private Transform streamTrans;
+  public float streamStrength = 100.0f;
+
   private IEnumerator Start()
   {
      InitPool();
@@ -62,6 +65,7 @@ public class Chapter6_4SceneManager : MonoBehaviour
     EnsureReflectionTexture();
     UpdateShaderGlobals();
     UpdateReflection();
+    UpdateStream();
     UpdateLightCam();
   }
 
@@ -225,7 +229,7 @@ public class Chapter6_4SceneManager : MonoBehaviour
            {
                Bounds b = waterRenderer.bounds;
                lightCamera.orthographicSize = Mathf.Max(b.size.x, b.size.z) * 0.5f * 1.1f;
-               Debug.Log($"[Caustic] 自动 orthoSize={lightCamera.orthographicSize:F2}，水面 bounds={b.size}");
+               //Debug.Log($"[Caustic] 自动 orthoSize={lightCamera.orthographicSize:F2}，水面 bounds={b.size}");
            }
            else
            {
@@ -236,6 +240,19 @@ public class Chapter6_4SceneManager : MonoBehaviour
        UpdateLightCamTransform();
    }
 
+    private void UpdateStream()
+    {
+        if (streamTrans == null || poolGO == null) return;
+
+        Bounds b = poolGO.GetComponentInChildren<Renderer>().bounds;
+
+        Vector3 p = streamTrans.position;
+        float u = Mathf.Clamp01((p.x - b.min.x) / Mathf.Max(b.size.x, 1e-6f));
+        float v = Mathf.Clamp01((p.z - b.min.z) / Mathf.Max(b.size.z, 1e-6f));
+
+        Vector3 dir = streamTrans.forward;
+        fluid.ExternalForce(new Vector3(u, v, 0f),new Vector3(dir.x, dir.z, 0f) * streamStrength);
+    }
    private void UpdateLightCamTransform()
    {
        if (lightCamera == null || sunLight == null)

@@ -33,7 +33,7 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _DebugMode: 2
+    - _DebugMode: 0
     - _Metallic: 0
     - _PressureDebugScale: 10
     - _Smoothness: 0.627
