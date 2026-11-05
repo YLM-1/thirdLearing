@@ -44,6 +44,7 @@ Shader "Unlit/chapter6_4Pool"
             float _PoolWidth;
             float _PoolHeight;
             float _FlowStrength;
+            float _NormalStrength;   // 压力梯度放大倍数，越大水波越明显
                 
             float _ReflectionDistort;
             float _ReflectionStrength;
@@ -83,7 +84,7 @@ Shader "Unlit/chapter6_4Pool"
 
                 // 使用压力场贴图来扰动顶点，仅在Y轴上扰动
                 float pressureBuffer = SAMPLE_TEXTURE2D_LOD(_PressureRT, sampler_PressureRT, o.pressureUV, 0).r;
-                float pressureValue = clamp(pressureBuffer, -_MaxPoolDisplacement*0.01, _MaxPoolDisplacement*0.1);
+                float pressureValue = clamp(pressureBuffer, -_MaxPoolDisplacement*0.03, _MaxPoolDisplacement*0.3);
                 o.posWS.y += pressureValue;
                 o.vertex = TransformWorldToHClip(o.posWS);
 
@@ -127,18 +128,24 @@ Shader "Unlit/chapter6_4Pool"
 
                 float2 flow = SAMPLE_TEXTURE2D(_VelocityRT,sampler_VelocityRT,uv).rg*_FlowStrength;
 
+                // 采样步长：原来只有 0.5 像素，梯度太小，法线几乎恒等于 (0,1,0)
+                // 放大到 3 像素，梯度更平滑也更明显
+                const float stepPixels = 1;
+
                 // 计算S方向，可以指定为u向
-                float2 du = float2((1.0+flow.r)/_PoolWidth*0.5,0);
+                float2 du = float2((1.0 + flow.r) * stepPixels / _PoolWidth, 0);
                 // 即当前像素点u向左右邻域的像素
                 float u1 = SAMPLE_TEXTURE2D(_PressureRT, sampler_PressureRT, uv - du).r;
                 float u2 = SAMPLE_TEXTURE2D(_PressureRT, sampler_PressureRT, uv + du).r;
                 // 计算T方向，可以指定为v向
-                float2 dv = float2(0,(1.0+flow.y)/_PoolHeight*0.5);
+                float2 dv = float2(0, (1.0 + flow.y) * stepPixels / _PoolHeight);
                 // 即当前像素点v向上下邻域的像素
                 float v1 = SAMPLE_TEXTURE2D(_PressureRT, sampler_PressureRT, uv - dv).r;
                 float v2 = SAMPLE_TEXTURE2D(_PressureRT, sampler_PressureRT, uv + dv).r;
 
-                float3 normal = float3(u1-u2,1,v1-v2);
+                // 压力梯度本身很小（池底焦散那边是乘了 _CausticIntensity ≈60 倍才看得见的），
+                // 这里用 _NormalStrength 放大同一个梯度，水面才会有明暗 / 折射起伏
+                float3 normal = float3((u1 - u2) * _NormalStrength, 1.0, (v1 - v2) * _NormalStrength);
                 normal = normalize(normal);
                 return normal;
             }

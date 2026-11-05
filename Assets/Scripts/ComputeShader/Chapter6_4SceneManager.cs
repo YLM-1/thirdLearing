@@ -16,6 +16,10 @@ public class Chapter6_4SceneManager : MonoBehaviour
   bool initialized = false;
   public float _MaxPoolDisplacement = 2.0f;//控制水面的顶点位移
 
+  [Header("水面波纹")]
+  [Tooltip("压力梯度放大倍数，越大水波越明显（池底焦散那边等效放大约 60 倍）")]
+  public float normalStrength = 60f;
+
   //反射
   [Range(0,1f)]
   public float reflectionStrength = 1f;
@@ -128,6 +132,7 @@ public class Chapter6_4SceneManager : MonoBehaviour
         Shader.SetGlobalFloat("_PoolWidth", pressureRT.width);
         Shader.SetGlobalFloat("_PoolHeight", pressureRT.height);
         Shader.SetGlobalFloat("_FlowStrength", flowStrength);
+        Shader.SetGlobalFloat("_NormalStrength", normalStrength);
 
         // 压力场的世界 XZ 映射范围（水面和水面下的池底共用）
         if (poolGO != null)
