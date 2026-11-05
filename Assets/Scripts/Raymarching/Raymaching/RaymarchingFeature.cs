@@ -10,6 +10,7 @@ using UnityEngine.Rendering.Universal;
 public class RaymarchingFeature : ScriptableRendererFeature
 {
     public Shader shader;
+    public Texture2D reampMap;
     private Material mat;
     private Pass pass;
     //Create() 并不负责每一帧绘制屏幕，而是负责准备渲染所需要的对象，并告诉 URP 我们希望在哪个阶段执行。
@@ -37,7 +38,7 @@ public class RaymarchingFeature : ScriptableRendererFeature
         if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView)
             return;
 
-        pass.Setup(camera);
+        pass.Setup(camera, reampMap);
         renderer.EnqueuePass(pass);
     }
 
@@ -60,6 +61,7 @@ public class RaymarchingFeature : ScriptableRendererFeature
         private Material material;
         private RTHandle colorTarget;
         private Camera camera;
+        private Texture2D reampMap;
 
         public Pass(Material material)
         {
@@ -71,9 +73,10 @@ public class RaymarchingFeature : ScriptableRendererFeature
             colorTarget = target;
         }
 
-        public void Setup(Camera camera)
+        public void Setup(Camera camera, Texture2D tex)
         {
             this.camera = camera;
+            reampMap = tex;
         }
 
         public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
@@ -87,6 +90,7 @@ public class RaymarchingFeature : ScriptableRendererFeature
                 return;
 
             material.SetMatrix("_FrustumCorners", GetFrustumCorners(camera));
+            material.SetTexture("_ReampMap",reampMap);
 
             CommandBuffer cmd = CommandBufferPool.Get();
             Blitter.BlitCameraTexture(cmd, colorTarget, colorTarget, material, 0);

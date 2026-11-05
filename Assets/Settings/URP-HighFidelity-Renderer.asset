@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Active: 1
   shader: {fileID: 4800000, guid: 8b515ff7ad625a84eb2a5232446cd343, type: 3}
+  reampMap: {fileID: 2800000, guid: be55a9b23edebb344b5bd26d50782172, type: 3}
 --- !u!114 &-1878332245247344467
 MonoBehaviour:
   m_ObjectHideFlags: 0
