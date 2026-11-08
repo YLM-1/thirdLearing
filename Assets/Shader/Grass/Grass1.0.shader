@@ -28,7 +28,7 @@ Shader "Unlit/Grass1.0"
             #pragma geometry geo
             #pragma fragment frag
 
-            #define PI 3.1415926
+            // PI 已经由 URP 的 Macros.hlsl 定义，这里不要再 define，否则会报 macro redefinition
             #define _GRASS_SEGMENT 3
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -122,7 +122,6 @@ Shader "Unlit/Grass1.0"
             //TriangleStream<g2f>: 这是一个模板流对象，专门用来输出三角形流
             void geo(triangle v2g IN[3],inout TriangleStream<g2f> triStream)
             {
-                g2f o;
                 float3 pos = IN[0].vertex.xyz;
 
                 //构建TBN矩阵，在Object Space中构建TBN矩阵

@@ -24,7 +24,7 @@ Shader "Unlit/SchlickFresnel"
 
             #pragma vertex vert
             #pragma fragment frag
-            #define PI 3.14159265359
+            // PI 已经由 URP 的 Macros.hlsl 定义，这里不要再 define
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 

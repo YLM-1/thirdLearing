@@ -29,25 +29,25 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BlendingRandom: 0.743
-    - _Curve: 2.92
-    - _Forward: 0.59
-    - _ForwardRandom: 0.382
-    - _Height: 0.223
-    - _HeightRandom: 0.277
+    - _BlendingRandom: 0.327
+    - _Curve: 3.74
+    - _Forward: 0.358
+    - _ForwardRandom: 0.244
+    - _Height: 0.382
+    - _HeightRandom: 0.372
     - _Radius: 0.7
-    - _RotationRandom: 0.486
-    - _ShadowStrength: 0.547
-    - _SpecularIntensity: 2.38
-    - _SpecularPower: 5
-    - _Translucent: 1.23
-    - _Varation: 0.05
-    - _Width: 0.0455
-    - _WidthRandom: 0.0656
-    - _WindSpeed: 0.2
-    - _WindStrength: 0.5
+    - _RotationRandom: 0.519
+    - _ShadowStrength: 0.452
+    - _SpecularIntensity: 1.35
+    - _SpecularPower: 1.2
+    - _Translucent: 0.74
+    - _Varation: 0.0449
+    - _Width: 0.027
+    - _WidthRandom: 0.0846
+    - _WindSpeed: 0.776
+    - _WindStrength: 0.193
     m_Colors:
-    - _BottomColor: {r: 0.37106913, g: 0.26357818, b: 0, a: 1}
-    - _ColorVaration: {r: 0.56001884, g: 0.57232696, b: 0, a: 1}
-    - _TopColor: {r: 0, g: 0.57232696, b: 0.1761006, a: 1}
+    - _BottomColor: {r: 0.36477977, g: 0.30290848, b: 0.15485929, a: 1}
+    - _ColorVaration: {r: 0.56472945, g: 0.57861626, b: 0, a: 1}
+    - _TopColor: {r: 0, g: 0.5849056, b: 0.17997095, a: 1}
   m_BuildTextureStacks: []

@@ -7,6 +7,12 @@ Shader "Hidden/CloudRayMarching"
         _CloudScale("CloudScale", Vector) = (20000,20000,20000,20000)
         _CloudOpacity("Cloud Opacity", Range(0,0.1))=0.01
 
+        [Header(Shape Detail)]
+        _ShapeScale("Shape Scale", Float) = 6
+        _Coverage("Coverage", Range(0,1)) = 0.48
+        _CoverageSoftness("Coverage Softness", Range(0.001,1)) = 0.12
+        _DetailAmount("Detail Amount", Range(0,1)) = 0.5
+
         [Header(Height)]
         _CloudHeight("Cloud Height", Float)=1000
         _CloudThickness("Cloud Thickness", Float)=600
@@ -20,11 +26,15 @@ Shader "Hidden/CloudRayMarching"
         _SkyColor("Sky Color", Color) = (1,1,1,1)
         _CloudColor("Cloud Color", Color) = (1,1,1,1)
         _FarCloudColorAmount("Far Cloud Color Amount", Range(0,1))=0.5
-        _NearCloudColorAmount("Far Cloud Color Amount", Range(0,1))=0.5
+        _NearCloudColorAmount("Near Cloud Color Amount", Range(0,1))=0.5
 
         [Header(Ground)]
         _GroundColor("Ground Color", Color) = (1,1,1,1)
         _GroundColorAmount("Ground Color Amount", Range(0,0.1))=0.01
+
+        [Header(Distance)]
+        _MaxStepLength("Max Step Length", Float) = 40
+        _DistanceFalloff("Distance Falloff", Float) = 0.00002
 
         [Header(Gradient)]
         _CloudEdgeScale("Cloud Edge Scale", Range(0,1)) = 0.5
@@ -78,6 +88,12 @@ Shader "Hidden/CloudRayMarching"
             float _CloudEdgeScale;
             float _GroundColorAmount;
             float _CloudSoftness;
+            float _ShapeScale;
+            float _Coverage;
+            float _CoverageSoftness;
+            float _DetailAmount;
+            float _MaxStepLength;
+            float _DistanceFalloff;
             CBUFFER_END
 
             TEXTURE2D(_CloudTex);
@@ -88,15 +104,16 @@ Shader "Hidden/CloudRayMarching"
 
             float4 raymarching(float3 ro,float3 rd)
             {
-                if(rd.y>=0)
+                if(rd.y>0.001)
                 {
                     rd = rd/rd.y;
                     float4 c = 0;//颜色
                     float maxStep=64;
                     float3 position = ro + rd * (_CloudHeight-ro.y);
                     float3 t=rd*_CloudThickness/maxStep;
-                    float stepOpacity=_CloudOpacity;
-                    stepOpacity=1-1/(_CloudOpacity*length(t)+1);
+                    //限制单步长度：掠射角下 length(t)远处几步就糊满
+                    float stepLength=min(length(t),_MaxStepLength);
+                    float stepOpacity=(_CloudOpacity * stepLength)/ (1 + _CloudOpacity * stepLength);
 
                     //和天空颜色的混合
                     float farCloudColorAmount=1-1/(_FarCloudColorAmount*length(rd)+1);
@@ -106,10 +123,20 @@ Shader "Hidden/CloudRayMarching"
                     {
                         position+=t;
 
-                        float2 uv0 = (position.xz+_CloudSpeed*_Time.y)/_CloudScale.xy;
-                        float cloud0 = SAMPLE_TEXTURE2D(_CloudTex, sampler_CloudTex, uv0).r*stepOpacity;
+                        float2 uv0 = saturate((position.xz+_CloudSpeed*_Time.y)/_CloudScale.xy);
+                        float detail = SAMPLE_TEXTURE2D(_CloudTex, sampler_CloudTex, uv0).r;
 
-                        float2 uv1=(position.xz+_CloudSpeed*_Time.y)/_CloudScale.zw;
+                        //大尺度形状：同一张噪声放大 _ShapeScale 倍，形成成片的云和晴空
+                        float2 shapeUV = (position.xz+_CloudSpeed*_Time.y)/(_CloudScale.xy*max(_ShapeScale,0.001));
+                        float shape = SAMPLE_TEXTURE2D(_CloudTex, sampler_CloudTex, shapeUV).r;
+
+                        //细节只做轻微扰动，避免破坏覆盖率
+                        float density = shape + shape*(detail-0.5)*_DetailAmount;
+                  
+                        //覆盖率：低于阈值的区域直接是晴空
+                        float cloud0 = smoothstep(_Coverage,_Coverage+max(_CoverageSoftness,1e-4),density);
+
+                        float2 uv1=saturate((position.xz+_CloudSpeed*_Time.y)/_CloudScale.zw);
                         float2 uv2=uv1;
                         uv2.y+=0.5;
 
@@ -125,14 +152,18 @@ Shader "Hidden/CloudRayMarching"
                         if(f>cloudBottomHeight&&f<cloudTopHeight)
                         {
                             float distanceToSurface = min(f-cloudBottomHeight,cloudTopHeight-f);
-                            float localOpacity = saturate(distanceToSurface)/_CloudSoftness;
+                            float localOpacity = saturate(distanceToSurface/_CloudSoftness);
 
-                            //添加渐变
-                            float cloudToHeightSmooth=1-cloud0*_TopSurfaceScale;
-                            float cloudDarkness=1-saturate(cloudToHeightSmooth-f);
-                            float4 gradientColor=SAMPLE_TEXTURE2D(_GradientTex, sampler_GradientTex, float2(cloudDarkness,0));
+                            //添加渐变：云底=0(暗) → 云顶=1(亮)
+                            float localThickness=max(cloudTopHeight-cloudBottomHeight,0.001);
+                            float height01=saturate((f-cloudBottomHeight)/localThickness);
+                            float4 gradientColor=SAMPLE_TEXTURE2D(_GradientTex, sampler_GradientTex, float2(height01,0));
 
-                            c += (1 - c.a) * stepOpacity * localOpacity * gradientColor;
+                            //距离衰减：远处的云淡进天空色，不再越远越密
+                            float distanceToCamera=length(position-ro);
+                            float distanceFade=exp(-distanceToCamera*_DistanceFalloff);
+
+                            c += (1 - c.a) * stepOpacity * localOpacity * distanceFade * gradientColor;
 
                             if(c.a>0.99)
                                break;

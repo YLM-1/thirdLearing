@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a45c771a7b350347a81e5af9f118828, type: 3}
   m_Name: RaymarchingFeature
   m_EditorClassIdentifier: 
-  m_Active: 1
+  m_Active: 0
   shader: {fileID: 4800000, guid: 8b515ff7ad625a84eb2a5232446cd343, type: 3}
   reampMap: {fileID: 2800000, guid: be55a9b23edebb344b5bd26d50782172, type: 3}
 --- !u!114 &-1878332245247344467
@@ -27,7 +27,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f62c9c65cf3354c93be831c8bc075510, type: 3}
   m_Name: SSAO
   m_EditorClassIdentifier: 
-  m_Active: 1
+  m_Active: 0
   m_Settings:
     AOMethod: 1
     Downsample: 0
@@ -71,7 +71,8 @@ MonoBehaviour:
   - {fileID: 11400001}
   - {fileID: 11400002}
   - {fileID: -5477025949107041854}
-  m_RendererFeatureMap: adc0de57c6d2eee541f3ad000000000042f3ad0000000000c2c9e0f5eab1fdb3
+  - {fileID: 2046071869429722993}
+  m_RendererFeatureMap: adc0de57c6d2eee541f3ad000000000042f3ad0000000000c2c9e0f5eab1fdb3712f4752861b651c
   m_UseNativeRenderPass: 0
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   xrSystemData: {fileID: 11400000, guid: 60e1133243b97e347b653163a8c01b64, type: 2}
@@ -126,7 +127,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 29c3f91628cb4a548a7c63dd7bd89ae1, type: 3}
   m_Name: Volumetric Shadow
   m_EditorClassIdentifier: 
-  m_Active: 1
+  m_Active: 0
 --- !u!114 &11400002
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -139,4 +140,35 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e5d262e0777f48d663e1cb32d45d3549, type: 3}
   m_Name: Chapter6_1_CommandBufferFeature
   m_EditorClassIdentifier: 
-  m_Active: 1
+  m_Active: 0
+--- !u!114 &2046071869429722993
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7b40fda3eeb1884db36a7ffb841afe2, type: 3}
+  m_Name: CloudRaymarchingFeature
+  m_EditorClassIdentifier: 
+  m_Active: 0
+  shader: {fileID: 4800000, guid: ada86681df7a63f4ab6f90758b8d97d3, type: 3}
+  CloudMap: {fileID: 2800000, guid: f884b3b3c919bef43b95d70c93396518, type: 3}
+  cloudScale: {x: 20000, y: 20000, z: 2000, w: 2000}
+  cloudOpacity: 0.03
+  cloudHeight: 1000
+  cloudThickness: 600
+  topSurfaceScale: 1.2
+  bottomSurfaceScale: 0.15
+  cloudSpeed: {x: 100, y: 100, z: 100, w: 0}
+  skyColor: {r: 0, g: 0.44705915, b: 1, a: 1}
+  cloudColor: {r: 0.24213827, g: 0.81738263, b: 1, a: 1}
+  farCloudColorAmount: 0.045
+  nearCloudColorAmount: 0.073
+  groundColor: {r: 0.23899364, g: 0.23899364, b: 0.23899364, a: 1}
+  farGroundColorAmount: 0.028
+  gradientTex: {fileID: 2800000, guid: ae49f149d1fb5ae46a9dbe62abda9157, type: 3}
+  cloudSoftness: 0.269
+  cloudEdgeScale: 0.045

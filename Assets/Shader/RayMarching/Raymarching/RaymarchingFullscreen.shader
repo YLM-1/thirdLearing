@@ -19,6 +19,7 @@ Shader "Hidden/RaymarchingFullscreen"
 
             struct appdata
             {
+                //在没有顶点数据的情况下，给顶点着色器一个编号，让它自己生成 3 个顶点，拼成一个盖住全屏的大三角形。仅此而已。
                 uint vertexID : SV_VertexID;//SV_VertexID 是 GPU 提供的系统语义，表示当前处理的顶点编号。
             };
 
@@ -26,7 +27,6 @@ Shader "Hidden/RaymarchingFullscreen"
             {
                 float4 vertex : SV_POSITION;
                 float2 uv : TEXCOORD0;   // 屏幕 uv，后面采样深度/贴图用
-                float2 ndc : TEXCOORD1;
             };
 
             TEXTURE2D(_CameraDepthTexture);
@@ -41,7 +41,6 @@ Shader "Hidden/RaymarchingFullscreen"
                 float4 pos = GetFullScreenTriangleVertexPosition(v.vertexID);
                 o.vertex = pos;
                 o.uv = GetFullScreenTriangleTexCoord(v.vertexID);
-                o.ndc = pos.xy;
                 return o;
             }
 
@@ -160,8 +159,7 @@ Shader "Hidden/RaymarchingFullscreen"
 
             float4 frag (v2f i) : SV_Target
             {
-                // ndc(-1~1) -> 0~1，用它在四角之间插值
-                float2 t = i.ndc * 0.5 + 0.5;
+                float2 t = i.uv;
 
                 float3 bottom = lerp(_FrustumCorners[0].xyz, _FrustumCorners[1].xyz, t.x);
                 float3 top    = lerp(_FrustumCorners[3].xyz, _FrustumCorners[2].xyz, t.x);

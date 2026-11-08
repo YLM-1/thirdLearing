@@ -41,7 +41,7 @@ Shader "Unlit/Grass"
     #pragma target 4.0
     
     #define _GRASS_SEGMENTS 3 //定义草叶垂直方向的细分段数
-    #define PI 3.14159265
+    // PI 已经由 URP 的 Macros.hlsl 定义，这里不要再 define，否则会报 macro redefinition
 
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -58,7 +58,7 @@ Shader "Unlit/Grass"
     struct v2g
     {
         float2 uv : TEXCOORD0;
-        float4 vertex : SV_POSITION;
+        float4 vertex : TEXCOORD1;   // 物体空间坐标，几何着色器里再算裁剪空间
         float3 normal : NORMAL;
         float4 tangent : TANGENT;
     };
@@ -118,7 +118,7 @@ Shader "Unlit/Grass"
 
     // angle: 弧度制的角度
     // axis: 旋转所绕的轴
-    // 类似 c# Quaternion.AngleAxis
+    //罗德里格旋转公式
     float3x3 _angleAxis3x3(float angle, float3 axis)
     {
         float c, s;
@@ -140,141 +140,7 @@ Shader "Unlit/Grass"
     {
         return frac(sin(dot(pos,float3(12.9898,78.233,45.1643)))*43758.5453);
     }
-
-    g2f VertexOutPut(float3 origPos,float3 pos,float3 normal,float2 uv,float3x3 mat)
-    {
-        g2f o;
-        float3 p=mul(mat,pos);//TBN空间转换到Object Space
-        float3 objectPos = origPos + p;
-        o.pos = TransformObjectToHClip(objectPos);
-        o.worldNormal = TransformObjectToWorldNormal(mul(mat,normal));
-        o.posWS = TransformObjectToWorld(objectPos);
-        o.uv = uv;
-        o.varation = RandomValue(origPos);
-
-        //计算阴影坐标
-        o.shadowCoord = TransformWorldToShadowCoord(o.posWS);
-        return o;
-    }
-
-    g2f ShadowVertexOutPut(float3 origPos,float3 pos,float3 normal,float2 uv,float3x3 mat)
-    {
-        g2f o;
-        float3 objectPos = origPos + mul(mat,pos);
-        float3 positionWS = TransformObjectToWorld(objectPos);
-        float3 normalWS = TransformObjectToWorldNormal(mul(mat,normal));
-
-        #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
-            float3 lightDirectionWS = normalize(_LightPosition - positionWS);
-        #else
-            float3 lightDirectionWS = _LightDirection;
-        #endif
-
-        o.pos = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
-        #if UNITY_REVERSED_Z
-            o.pos.z = min(o.pos.z, UNITY_NEAR_CLIP_VALUE);
-        #else
-            o.pos.z = max(o.pos.z, UNITY_NEAR_CLIP_VALUE);
-        #endif
-        o.worldNormal = normalWS;
-        o.posWS = positionWS;
-        o.uv = uv;
-        o.varation = RandomValue(origPos);
-        o.shadowCoord = 0;
-        return o;
-    }
     
-    [maxvertexcount(_GRASS_SEGMENTS*2+1)]//单次执行最多会输出多少个顶点。
-     //TriangleStream<g2f>: 这是一个模板流对象，专门用来输出三角形流
-    void geo(triangle v2g IN[3], inout TriangleStream<g2f> triStream)
-    {
-        g2f o;
-
-        //每个顶点的位置绘制一个三角形
-        float3 pos = IN[0].vertex;
-
-        //定义每个草的模型的切线空间
-        float3 normal = IN[0].normal;
-        float4 tangent = IN[0].tangent;
-        float3 binormal = cross(normal, tangent.xyz)*tangent.w;
-        float3x3 TBN = transpose(float3x3(tangent.xyz, binormal, normal));
-
-        //随机方向
-        float3x3 fracingRotationMat = _angleAxis3x3(RandomValue(pos)*2*PI*_RotationRandom,float3(0,0,1));//在切线空间旋转，此时它的法线方向是z轴
-        float3x3 facingMat = mul(TBN,fracingRotationMat);//在切线空间旋转然后再转换到模型空间，所以是先乘以旋转矩阵再TBN
-                                                         //重新创建了这个变换矩阵(线性代数中矩阵的乘是从右往左来乘的)
-
-        //随机弯曲
-        float3x3 bendingRotationMat = _angleAxis3x3(RandomValue(pos.zxy)*0.5*PI*_BlendingRandom,float3(1,0,0));
-        float3x3 mat = mul(facingMat,bendingRotationMat);
-
-        //添加动画
-        float2 windUV = pos.xz+_Time.x*_WindSpeed;
-        float2 windSample = SAMPLE_TEXTURE2D_LOD(_WindTexture,sampler_WindTexture,windUV,0).rg*_WindStrength;
-        float3 wind = normalize(float3(windSample.x,windSample.y,0));
-        float3x3 windRotationMat = _angleAxis3x3(windSample.x*PI,wind);
-        mat = mul(mat,windRotationMat);
-
-        //增加草模型的细分
-        //计算高度和宽度
-        float height = _Height + RandomValue(pos.yzx)*_HeightRandom;
-        float width  = _Width  + RandomValue(pos.zxy)*_WidthRandom;
-        float forward = _Forward + RandomValue(pos.xzy)*_ForwardRandom;
-
-        //交互
-        float3 worldPos = TransformObjectToWorld(pos).xyz;
-        float dis = distance(_Position.xyz,worldPos);
-        float radius = 1-saturate(dis/_Radius);
-        height = height-radius;
-        forward = forward-radius*2;
-
-        for(int i=0;i<_GRASS_SEGMENTS;++i)
-        {
-            float t=i/(float)_GRASS_SEGMENTS;
-            float h=height*t;
-            float w=i==0?width/1.5:width*(1-t);
-            float f=pow(t,_Curve)*forward;
-
-            float3x3 currentMat = (i == 0) ? facingMat : mat;
-
-            //在这里，我修改了坐标轴x轴：宽度 ,y轴：向前弯曲 ,z轴：草的高度
-            triStream.Append(VertexOutPut(pos,float3(w,f,h), float3(0,-1,f),float2(0,t),currentMat));
-            triStream.Append(VertexOutPut(pos,float3(-w,f,h), float3(0,-1,f),float2(1,t),currentMat));
-        }
-        triStream.Append(VertexOutPut(pos,float3(0,forward,height),float3(0,-1,forward),float2(0.5,1),mat));
-    }
-
-    [maxvertexcount(_GRASS_SEGMENTS*2+1)]
-    void shadowGeo(triangle v2g IN[3], inout TriangleStream<g2f> triStream)
-    {
-        float3 pos = IN[0].vertex;
-        float3 normal = IN[0].normal;
-        float4 tangent = IN[0].tangent;
-        float3 binormal = cross(normal, tangent.xyz) * tangent.w;
-        float3x3 TBN = transpose(float3x3(tangent.xyz, binormal, normal));
-
-        float3x3 facingRotationMat = _angleAxis3x3(RandomValue(pos) * 2 * PI * _RotationRandom, float3(0, 0, 1));
-        float3x3 facingMat = mul(TBN, facingRotationMat);
-        float3x3 bendingRotationMat = _angleAxis3x3(RandomValue(pos.zxy) * 0.5 * PI * _BlendingRandom, float3(1, 0, 0));
-        float3x3 mat = mul(facingMat, bendingRotationMat);
-
-        float height = _Height + RandomValue(pos.yzx) * _HeightRandom;
-        float width = _Width + RandomValue(pos.zxy) * _WidthRandom;
-        float forward = _Forward + RandomValue(pos.xzy) * _ForwardRandom;
-
-        for (int i = 0; i < _GRASS_SEGMENTS; ++i)
-        {
-            float t = i / (float)_GRASS_SEGMENTS;
-            float h = height * t;
-            float w = i == 0 ? width / 1.5 : width * (1 - t);
-            float f = pow(t, _Curve) * forward;
-            float3x3 currentMat = i == 0 ? facingMat : mat;
-
-            triStream.Append(ShadowVertexOutPut(pos, float3(w, f, h), float3(0, -1, t), float2(0, t), currentMat));
-            triStream.Append(ShadowVertexOutPut(pos, float3(-w, f, h), float3(0, -1, t), float2(1, t), currentMat));
-        }
-        triStream.Append(ShadowVertexOutPut(pos, float3(0, forward, height), float3(0, -1, 1), float2(0.5, 1), mat));
-    }
     ENDHLSL
     SubShader
     {
@@ -290,6 +156,81 @@ Shader "Unlit/Grass"
             #pragma fragment frag
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _SHADOWS_SOFT
+
+            g2f VertexOutPut(float3 origPos,float3 pos,float3 normal,float2 uv,float3x3 mat)
+            {
+                g2f o;
+                float3 p=mul(mat,pos);//TBN空间转换到Object Space
+                float3 objectPos = origPos + p;
+                o.pos = TransformObjectToHClip(objectPos);
+                o.worldNormal = TransformObjectToWorldNormal(mul(mat,normal));
+                o.posWS = TransformObjectToWorld(objectPos);
+                o.uv = uv;
+                o.varation = RandomValue(origPos);
+
+                //计算阴影坐标
+                o.shadowCoord = TransformWorldToShadowCoord(o.posWS);
+                return o;
+            }
+
+            [maxvertexcount(_GRASS_SEGMENTS*2+1)]//单次执行最多会输出多少个顶点。
+            //TriangleStream<g2f>: 这是一个模板流对象，专门用来输出三角形流
+            void geo(triangle v2g IN[3], inout TriangleStream<g2f> triStream)
+            {
+                //每个顶点的位置绘制一个三角形
+                float3 pos = IN[0].vertex.xyz;
+
+                //定义每个草的模型的切线空间
+                float3 normal = IN[0].normal;
+                float4 tangent = IN[0].tangent;
+                float3 binormal = cross(normal, tangent.xyz)*tangent.w;
+                float3x3 TBN = transpose(float3x3(tangent.xyz, binormal, normal));
+
+                //随机旋转方向
+                float3x3 fracingRotationMat = _angleAxis3x3(RandomValue(pos)*2*PI*_RotationRandom,float3(0,0,1));//在切线空间旋转，此时它的法线方向是z轴
+                float3x3 facingMat = mul(TBN,fracingRotationMat);//在切线空间旋转然后再转换到模型空间，所以是先乘以旋转矩阵再TBN
+                                                               
+
+                //随机弯曲
+                float3x3 bendingRotationMat = _angleAxis3x3(RandomValue(pos.zxy)*0.5*PI*_BlendingRandom,float3(1,0,0));
+                float3x3 mat = mul(facingMat,bendingRotationMat);
+
+                //添加动画
+                float2 windUV = pos.xz+_Time.x*_WindSpeed;
+                float2 windSample = SAMPLE_TEXTURE2D_LOD(_WindTexture,sampler_WindTexture,windUV,0).rg*_WindStrength;
+                //将风的方向旋转
+                float3 wind = normalize(float3(windSample.x,windSample.y,0));
+                float3x3 windRotationMat = _angleAxis3x3(windSample.x*PI,wind);
+                mat = mul(mat,windRotationMat);
+
+                //增加草模型的细分
+                //计算高度和宽度
+                float height = _Height + RandomValue(pos.yzx)*_HeightRandom;
+                float width  = _Width  + RandomValue(pos.zxy)*_WidthRandom;
+                float forward = _Forward + RandomValue(pos.xzy)*_ForwardRandom;
+
+                //交互
+                float3 worldPos = TransformObjectToWorld(pos).xyz;
+                float dis = distance(_Position.xyz,worldPos);
+                float radius = 1-saturate(dis/_Radius);
+                height = height-radius;
+                forward = forward-radius*2;
+
+                for(int i=0;i<_GRASS_SEGMENTS;++i)
+                {
+                    float t=i/(float)_GRASS_SEGMENTS;
+                    float h=height*t;
+                    float w=i==0?width/1.5:width*(1-t);
+                    float f=pow(t,_Curve)*forward;
+
+                    float3x3 currentMat = (i == 0) ? facingMat : mat;
+
+                    //在这里，我修改了坐标轴x轴：宽度 ,y轴：向前弯曲 ,z轴：草的高度
+                    triStream.Append(VertexOutPut(pos,float3(w,f,h), float3(0,-1,f),float2(0,t),currentMat));
+                    triStream.Append(VertexOutPut(pos,float3(-w,f,h), float3(0,-1,f),float2(1,t),currentMat));
+                }
+                triStream.Append(VertexOutPut(pos,float3(0,forward,height),float3(0,-1,forward),float2(0.5,1),mat));
+            }
 
             float4 frag (g2f i) : SV_Target
             {
@@ -332,6 +273,65 @@ Shader "Unlit/Grass"
             #pragma geometry shadowGeo
             #pragma fragment Shadowfrag
             #pragma multi_compile _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+
+            g2f ShadowVertexOutPut(float3 origPos,float3 pos,float3 normal,float2 uv,float3x3 mat)
+            {
+                g2f o;
+                float3 objectPos = origPos + mul(mat,pos);
+                float3 positionWS = TransformObjectToWorld(objectPos);
+                float3 normalWS = TransformObjectToWorldNormal(mul(mat,normal));
+
+                #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
+                    float3 lightDirectionWS = normalize(_LightPosition - positionWS);
+                #else
+                    float3 lightDirectionWS = _LightDirection;
+                #endif
+
+                o.pos = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
+                #if UNITY_REVERSED_Z
+                    o.pos.z = min(o.pos.z, UNITY_NEAR_CLIP_VALUE);
+                #else
+                    o.pos.z = max(o.pos.z, UNITY_NEAR_CLIP_VALUE);
+                #endif
+                o.worldNormal = normalWS;
+                o.posWS = positionWS;
+                o.uv = uv;
+                o.varation = RandomValue(origPos);
+                o.shadowCoord = 0;
+                return o;
+            }
+
+            [maxvertexcount(_GRASS_SEGMENTS*2+1)]
+            void shadowGeo(triangle v2g IN[3], inout TriangleStream<g2f> triStream)
+            {
+                float3 pos = IN[0].vertex.xyz;
+                float3 normal = IN[0].normal;
+                float4 tangent = IN[0].tangent;
+                float3 binormal = cross(normal, tangent.xyz) * tangent.w;
+                float3x3 TBN = transpose(float3x3(tangent.xyz, binormal, normal));
+
+                float3x3 facingRotationMat = _angleAxis3x3(RandomValue(pos) * 2 * PI * _RotationRandom, float3(0, 0, 1));
+                float3x3 facingMat = mul(TBN, facingRotationMat);
+                float3x3 bendingRotationMat = _angleAxis3x3(RandomValue(pos.zxy) * 0.5 * PI * _BlendingRandom, float3(1, 0, 0));
+                float3x3 mat = mul(facingMat, bendingRotationMat);
+
+                float height = _Height + RandomValue(pos.yzx) * _HeightRandom;
+                float width = _Width + RandomValue(pos.zxy) * _WidthRandom;
+                float forward = _Forward + RandomValue(pos.xzy) * _ForwardRandom;
+
+                for (int i = 0; i < _GRASS_SEGMENTS; ++i)
+                {
+                    float t = i / (float)_GRASS_SEGMENTS;
+                    float h = height * t;
+                    float w = i == 0 ? width / 1.5 : width * (1 - t);
+                    float f = pow(t, _Curve) * forward;
+                    float3x3 currentMat = i == 0 ? facingMat : mat;
+
+                    triStream.Append(ShadowVertexOutPut(pos, float3(w, f, h), float3(0, -1, t), float2(0, t), currentMat));
+                    triStream.Append(ShadowVertexOutPut(pos, float3(-w, f, h), float3(0, -1, t), float2(1, t), currentMat));
+                }
+                triStream.Append(ShadowVertexOutPut(pos, float3(0, forward, height), float3(0, -1, 1), float2(0.5, 1), mat));
+            }
 
             float4 Shadowfrag(g2f i):SV_Target
             {

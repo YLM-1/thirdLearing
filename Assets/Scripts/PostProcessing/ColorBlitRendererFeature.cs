@@ -11,14 +11,19 @@ internal class ColorBlitRendererFeature : ScriptableRendererFeature
 
     ColorBlitPass m_RenderPass = null;
 
+    public override void Create()
+    {
+        m_Material = CoreUtils.CreateEngineMaterial(m_Shader);
+        m_RenderPass = new ColorBlitPass(m_Material);
+    }
+
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
         if (renderingData.cameraData.cameraType == CameraType.Game)
             renderer.EnqueuePass(m_RenderPass);
     }
 
-    public override void SetupRenderPasses(ScriptableRenderer renderer,
-                                        in RenderingData renderingData)
+    public override void SetupRenderPasses(ScriptableRenderer renderer,in RenderingData renderingData)
     {
         if (renderingData.cameraData.cameraType == CameraType.Game)
         {
@@ -27,12 +32,6 @@ internal class ColorBlitRendererFeature : ScriptableRendererFeature
             m_RenderPass.ConfigureInput(ScriptableRenderPassInput.Color);
             m_RenderPass.SetTarget(renderer.cameraColorTargetHandle, m_Intensity);
         }
-    }
-
-    public override void Create()
-    {
-        m_Material = CoreUtils.CreateEngineMaterial(m_Shader);
-        m_RenderPass = new ColorBlitPass(m_Material);
     }
 
     protected override void Dispose(bool disposing)
