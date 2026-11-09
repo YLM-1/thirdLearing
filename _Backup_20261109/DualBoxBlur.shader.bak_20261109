@@ -1,0 +1,89 @@
+Shader "Hidden/DualBoxBlur"
+{
+    Properties
+    {
+    }
+    SubShader
+    {
+        Cull Off ZWrite Off ZTest Always
+
+        HLSLINCLUDE
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+        #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+
+        struct appdata
+        {
+            uint vertexID : SV_VertexID;
+        };
+
+        struct v2f
+        {
+            float2 uv : TEXCOORD0;
+            float4 vertex : SV_POSITION;
+        };
+
+        v2f vert (appdata v)
+        {
+            v2f o;
+            o.vertex = GetFullScreenTriangleVertexPosition(v.vertexID);
+            o.uv = GetFullScreenTriangleTexCoord(v.vertexID);
+            return o;
+        }
+
+        float4 _BlitTexture_TexelSize;
+        float _DualBoxBlurSize;
+
+        //降采样
+        //采样对角线的4个带你（偏移0.5*_DualBoxBlurSize个像素）
+        float4 Downfrag (v2f i) : SV_Target
+        {
+            float halfTexel = _BlitTexture_TexelSize.xy*0.5*_DualBoxBlurSize;
+
+            float4 sumColor = 0;
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(halfTexel,halfTexel));
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(-halfTexel,halfTexel));
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(-halfTexel,-halfTexel));
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(halfTexel,-halfTexel));
+            
+            return sumColor*0.25;
+        }
+
+        //升采样
+        float4 Upfrag(v2f i) : SV_Target
+        {
+            float halfTexel = _BlitTexture_TexelSize.xy*0.5*_DualBoxBlurSize;
+
+            float4 sumColor = 0;
+            //采样对角
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(halfTexel,halfTexel))*2;
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(-halfTexel,halfTexel))*2;
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(-halfTexel,-halfTexel))*2;
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(halfTexel,-halfTexel))*2;
+
+            //采样十字方向
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(0,halfTexel));
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(-halfTexel,0));
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(0,-halfTexel));
+            sumColor += SAMPLE_TEXTURE2D(_BlitTexture,sampler_BlitTexture,i.uv+float2(halfTexel,0));
+            return sumColor/12;
+        }
+
+        ENDHLSL
+
+        Pass
+        {
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment Downfrag
+            ENDHLSL
+        }
+
+        Pass
+        {
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment Upfrag
+            ENDHLSL
+        }
+    }
+}

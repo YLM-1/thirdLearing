@@ -98,18 +98,18 @@ Material:
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
     - _CloudColorAmount: 0.069
-    - _CloudEdgeScale: 0.207
+    - _CloudEdgeScale: 0.052
     - _CloudHeight: 1000
-    - _CloudOpacity: 0.0351
+    - _CloudOpacity: 0.0565
     - _CloudSoftness: 0.435
-    - _CloudSpeed: 100
+    - _CloudSpeed: 0
     - _CloudThickness: 600
-    - _Coverage: 0.206
-    - _CoverageSoftness: 0.561
+    - _Coverage: 0.237
+    - _CoverageSoftness: 0.624
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
-    - _DetailAmount: 0.343
+    - _DetailAmount: 0.436
     - _DetailNormalMapScale: 1
     - _DistanceFalloff: 0.00002
     - _DstBlend: 0
@@ -120,7 +120,7 @@ Material:
     - _Glossiness: 0
     - _GlossyReflections: 0
     - _GradientPower: 1
-    - _GroundColorAmount: 0.0045
+    - _GroundColorAmount: 0.0023
     - _MaxStep: 80
     - _MaxStepLength: 40
     - _Metallic: 0
