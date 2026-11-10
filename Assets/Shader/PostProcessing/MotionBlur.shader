@@ -1,4 +1,4 @@
-Shader "Hidden/Bloom"
+Shader "Hidden/MotionBlur"
 {
     Properties
     {
@@ -7,7 +7,9 @@ Shader "Hidden/Bloom"
     {
         Cull Off ZWrite Off ZTest Always
 
+
         HLSLINCLUDE
+
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
@@ -30,38 +32,40 @@ Shader "Hidden/Bloom"
             return o;
         }
 
-        float _GreyThreshold;
+        CBUFFER_START(UnityPerMaterial)
+        float _MotionAmount;
+        CBUFFER_END
 
-        float4 fragBrightness (v2f i) : SV_Target
+        float4 fragBlurAmount (v2f i) : SV_Target
         {
             float4 baseColor = SAMPLE_TEXTURE2D(_BlitTexture,sampler_LinearClamp,i.uv);
-            float grey = dot(baseColor.rgb,float3(0.2125,0.7154,0.0721));
-            float brightness = saturate(grey - _GreyThreshold);
-            return brightness;
+            baseColor.a = 1-_MotionAmount;
+            return baseColor;
         }
 
-        float4 fragBloom(v2f i) : SV_Target
+        float4 frag(v2f i) : SV_Target
         {
-            return 1;
+            float4 baseColor = SAMPLE_TEXTURE2D(_BlitTexture,sampler_LinearClamp,i.uv);
+            return baseColor;
         }
         ENDHLSL
 
-        UsePass "Hidden/Gaussian/VerticalBlur"
-        UsePass "Hidden/Gaussian/HorizontalBlur"
-
         Pass
         {
+            Blend SrcAlpha OneMinusSrcAlpha//将当前帧的画面与 copiedColor 中保存的历史画面按比例融合。
+            ColorMask RGB
             HLSLPROGRAM
             #pragma vertex vert
-            #pragma fragment fragBrightness
+            #pragma fragment fragBlurAmount
             ENDHLSL
         }
 
         Pass
         {
+            ColorMask A
             HLSLPROGRAM
             #pragma vertex vert
-            #pragma fragment fragBloom
+            #pragma fragment frag
             ENDHLSL
         }
     }

@@ -81,6 +81,12 @@ internal class FullScreenRenderPass : ScriptableRenderPass
             }
             RenderingUtils.ReAllocateIfNeeded(ref copiedColor, desc, name: "_FullScreenPassColorCopy");
         }
+        else if(effect == FullScreenEffect.MotionBlur)
+        {
+            var motionDsc = desc;
+            RenderingUtils.ReAllocateIfNeeded(ref copiedColor,desc,name:"_MotionBlurA");
+            copiedColor.rt.MarkRestoreExpected();
+        }
         else
         {
             RenderingUtils.ReAllocateIfNeeded(ref copiedColor, desc, name: "_FullScreenPassColorCopy");
@@ -121,6 +127,15 @@ internal class FullScreenRenderPass : ScriptableRenderPass
                     break;
                 case FullScreenEffect.EdgeDetection:
                      BlitEdgeDetection(cmd);
+                     break;
+                case FullScreenEffect.MotionBlur:
+                     BlitMotionBlur(cmd);
+                     break;
+                case FullScreenEffect.Vignette:
+                     BlitVignette(cmd);
+                     break;
+                case FullScreenEffect.Glitch:
+                     BlitGlitch(cmd);
                      break;
             }
         }
@@ -206,6 +221,25 @@ internal class FullScreenRenderPass : ScriptableRenderPass
     {
         Blitter.BlitCameraTexture(cmd,cameraColorTarget,copiedColor);
         Blitter.BlitCameraTexture(cmd, copiedColor, cameraColorTarget, material, 0);
+    }
+
+    void BlitMotionBlur(CommandBuffer cmd)
+    {
+        Blitter.BlitCameraTexture(cmd,cameraColorTarget,copiedColor,material,0);
+        Blitter.BlitCameraTexture(cmd,cameraColorTarget,copiedColor,material,1);
+        Blitter.BlitCameraTexture(cmd,copiedColor,cameraColorTarget);
+    }
+
+    void BlitVignette(CommandBuffer cmd)
+    {
+        Blitter.BlitCameraTexture(cmd,cameraColorTarget,copiedColor);
+        Blitter.BlitCameraTexture(cmd,copiedColor,cameraColorTarget,material,0);
+    }
+
+    void BlitGlitch(CommandBuffer cmd)
+    {
+        Blitter.BlitCameraTexture(cmd,cameraColorTarget,copiedColor);
+        Blitter.BlitCameraTexture(cmd,copiedColor,cameraColorTarget,material,0);
     }
 
     public void Dispose()

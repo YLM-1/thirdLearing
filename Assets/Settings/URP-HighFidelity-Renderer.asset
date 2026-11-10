@@ -13,26 +13,37 @@ MonoBehaviour:
   m_Name: FullScreenRenderFeature
   m_EditorClassIdentifier: 
   m_Active: 1
-  effect: 5
+  effect: 8
   colorBlitShader: {fileID: 4800000, guid: e0081264375acab47810a20ca5605a32, type: 3}
-  colorIntensity: 0.577
+  colorIntensity: 0.335
   tintColor: {r: 0.59119487, g: 0.32162485, b: 0.32162485, a: 0.72156864}
   grayscaleShader: {fileID: 4800000, guid: 5c39ce65b6ccb2f4d8bf88b5bcc2ea21, type: 3}
-  grayIntensity: 0.523
+  grayIntensity: 0.702
   gaussianShader: {fileID: 4800000, guid: 0ea9f5719e670ad44a66cf9c74272be5, type: 3}
-  blurSize: 1.33
-  downSample: 2
+  blurSize: 1.71
+  downSample: 3
   interaction: 4
   dualBoxBlurShader: {fileID: 4800000, guid: fde66ad42eeb99b47b4686df047c26c6, type: 3}
-  dualBoxBlurInteration: 4
-  dualBoxBlurSize: 1.95
+  dualBoxBlurInteration: 3
+  dualBoxBlurSize: 1.29
   bloomShader: {fileID: 4800000, guid: 1996c6c6c17ced54c9338d74c9027f1e, type: 3}
-  greyThreshold: 0.558
-  bloomIntensity: 1
-  bloomBlurSize: 4.33
-  bloomIteration: 6
+  greyThreshold: 0.352
+  bloomIntensity: 4.11
+  bloomBlurSize: 1.53
+  bloomIteration: 5
   edgeDetection: {fileID: 4800000, guid: 55669e6f8ebe96246ba39c3a1b7ce5dc, type: 3}
   edgeColor: {r: 0, g: 0, b: 0, a: 1}
+  motionBlur: {fileID: 4800000, guid: 7de712c480ed91248a47eb3a9653be84, type: 3}
+  motionAmount: 0.368
+  vignetteShader: {fileID: 4800000, guid: b8831d66484609c4d888a69b6b7ad4b6, type: 3}
+  vignetteColor: {r: 0, g: 0, b: 0, a: 1}
+  vignetteRadius: 0.61
+  vignetteSoftness: 0.33
+  vignettePower: 4
+  vignetteIntensity: 1
+  glitchShader: {fileID: 4800000, guid: 9046bf865966096419130863d485ee6a, type: 3}
+  amplitude: 2
+  amount: 2
 --- !u!114 &-5477025949107041854
 MonoBehaviour:
   m_ObjectHideFlags: 0

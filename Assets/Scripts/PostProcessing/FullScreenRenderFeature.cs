@@ -11,6 +11,9 @@ public enum FullScreenEffect
     DualBoxBlur,
     Bloom,
     EdgeDetection,
+    MotionBlur,
+    Vignette,
+    Glitch,
 };
 
 internal class FullScreenRenderFeature : ScriptableRendererFeature
@@ -49,6 +52,23 @@ internal class FullScreenRenderFeature : ScriptableRendererFeature
     [Header("EdgeDetection")]
     public Shader edgeDetection;
     public Color edgeColor = Color.white;
+
+    [Header("MotionBlur")]
+    public Shader motionBlur;
+    [Range(0,1f)]public float motionAmount = 0.3f;
+
+    [Header("Vignette")]
+    public Shader vignetteShader;
+    public Color vignetteColor = Color.black;
+    [Range(0,1f)] public float vignetteRadius  = 0.1f;
+    [Range(0,1f)] public float vignetteSoftness = 0.1f;
+    public float vignettePower = 5;
+    [Range(0,2f)]public float vignetteIntensity = 1;
+
+    [Header("Glitch")]
+    public Shader glitchShader;
+    public float amplitude = 2;
+    public float amount = 1;
 
     Material material;
     FullScreenRenderPass pass;
@@ -96,11 +116,9 @@ internal class FullScreenRenderFeature : ScriptableRendererFeature
                 material.SetFloat("_Intensity", colorIntensity);
                 material.SetVector("_Color", tintColor);
                 break;
-
             case FullScreenEffect.Grayscale:
                 material.SetFloat("_Intensity", grayIntensity);
                 break;
-
             case FullScreenEffect.Gaussian:
                 material.SetFloat("_BlurSize", blurSize);
                 break;
@@ -114,6 +132,20 @@ internal class FullScreenRenderFeature : ScriptableRendererFeature
                 break;
             case FullScreenEffect.EdgeDetection:
                 material.SetVector("_EdgeColor",edgeColor);
+                break;
+            case FullScreenEffect.MotionBlur:
+                material.SetFloat("_MotionAmount",motionAmount);
+                break;
+            case FullScreenEffect.Vignette:
+                material.SetFloat("_VignetteSoftness",vignetteSoftness);
+                material.SetFloat("_VignetteRadius",vignetteRadius);
+                material.SetFloat("_VignettePower",vignettePower);
+                material.SetFloat("_VignetteIntensity",vignetteIntensity);
+                material.SetColor("_VignetteColor",vignetteColor);
+                break;
+            case FullScreenEffect.Glitch:
+                material.SetFloat("_Amplitude",amplitude);
+                material.SetFloat("_Amount",amount);
                 break;
         }
 
@@ -145,6 +177,9 @@ internal class FullScreenRenderFeature : ScriptableRendererFeature
             case FullScreenEffect.DualBoxBlur: return dualBoxBlurShader;
             case FullScreenEffect.Bloom: return bloomShader;
             case FullScreenEffect.EdgeDetection:return edgeDetection;
+            case FullScreenEffect.MotionBlur:return motionBlur;
+            case FullScreenEffect.Vignette:return vignetteShader;
+            case FullScreenEffect.Glitch:return glitchShader;
             default: return null;
         }
     }
