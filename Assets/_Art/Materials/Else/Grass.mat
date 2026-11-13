@@ -29,21 +29,21 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BlendingRandom: 0.327
-    - _Curve: 3.74
-    - _Forward: 0.358
-    - _ForwardRandom: 0.244
-    - _Height: 0.382
-    - _HeightRandom: 0.372
+    - _BlendingRandom: 0.464
+    - _Curve: 3.17
+    - _Forward: 0.059
+    - _ForwardRandom: 0.362
+    - _Height: 0.175
+    - _HeightRandom: 0.319
     - _Radius: 0.7
-    - _RotationRandom: 0.519
-    - _ShadowStrength: 0.452
+    - _RotationRandom: 0.383
+    - _ShadowStrength: 0.51
     - _SpecularIntensity: 1.35
     - _SpecularPower: 1.2
-    - _Translucent: 0.74
+    - _Translucent: 1.08
     - _Varation: 0.0449
-    - _Width: 0.027
-    - _WidthRandom: 0.0846
+    - _Width: 0.0504
+    - _WidthRandom: 0.032
     - _WindSpeed: 0.776
     - _WindStrength: 0.193
     m_Colors:

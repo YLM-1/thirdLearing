@@ -29,7 +29,7 @@ Shader "Unlit/Grass1.0"
             #pragma fragment frag
 
             // PI 已经由 URP 的 Macros.hlsl 定义，这里不要再 define，否则会报 macro redefinition
-            #define _GRASS_SEGMENT 3
+            #define _GRASS_SEGMENT 5
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"

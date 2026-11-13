@@ -2,6 +2,11 @@ Shader "Hidden/Vignette"
 {
     Properties
     {
+        _VignetteColor("Vignette Color", Color) = (0,0,0,1)
+        _VignettePower("Vignette Power", Float) = 5
+        _VignetteIntensity("Vignette Intensity", Range(0,2)) = 1
+        _VignetteRadius("Vignette Radius", Range(0,1)) = 0.1
+        _VignetteSoftness("Vignette Softness", Range(0,1)) = 0.1
     }
     SubShader
     {

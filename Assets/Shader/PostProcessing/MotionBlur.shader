@@ -2,6 +2,7 @@ Shader "Hidden/MotionBlur"
 {
     Properties
     {
+        _MotionAmount("Motion Amount", Range(0,1)) = 0.3
     }
     SubShader
     {

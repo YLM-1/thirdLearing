@@ -2,6 +2,7 @@ Shader "Hidden/EdgeDetection"
 {
     Properties
     {
+        _EdgeColor("Edge Color", Color) = (1,1,1,1)
     }
     SubShader
     {

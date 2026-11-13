@@ -55,7 +55,7 @@ Shader "Unlit/Chapter6_1_MipmapLevel"
                 float4 depth;
 
                 //该Texture为正方形x=y
-                float offset = _MainTex_TexelSize.x/2;
+                float offset = _MainTex_TexelSize.x/2;//除2是因为：下一级 mipmap 的尺寸是上一级的 一半
                  // 采样周围4邻域的像素
                  // mipmap[i+1]的uv = mipmap[i]的 (uv), (u,v + 0.5/w), (u + 0.5/w, v), (u + 0.5w, v + 0.5w)
                 depth.x = SAMPLE_TEXTURE2D(_MainTex,sampler_MainTex,uv).r;

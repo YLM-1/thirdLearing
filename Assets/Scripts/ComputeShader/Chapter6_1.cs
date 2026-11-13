@@ -15,7 +15,7 @@ public class Chapter6_1 : MonoBehaviour
     [Range(0,5f)]
     [SerializeField] private float grassScale=1f;
     [Range(0,45f)]
-    [SerializeField] private float leanMax=1f;
+    [SerializeField] private float leanMax=1f;// 草被风吹弯的"最大弯曲角度"，单位是度
     [SerializeField]private Material mat;
 
     //风的控制
@@ -29,12 +29,12 @@ public class Chapter6_1 : MonoBehaviour
 
     //角色和草地互动相关
     [SerializeField] private Transform character;
-    [SerializeField] private float trampleRadius = 3f;
+    [SerializeField] private float trampleRadius = 0.5f;
 
     struct GrassClump
     {
         public Vector3 position;
-        public float lean;
+        public float lean;//lean 是每棵草此刻实际的弯曲角度（弧度），leanMax 是它的上限系数，lean 是真正算出来的结果。
         public float noise;
         public float trample;  //踩踏压扁程度
         public Quaternion quaternion;
@@ -127,8 +127,8 @@ public class Chapter6_1 : MonoBehaviour
             if(Physics.Raycast(pos,Vector3.down,out hit,100,terrainLayer.value))
             {
                 pos.y = hit.point.y;
-                clumpsArray[i] = new GrassClump(pos);
             }
+            clumpsArray[i] = new GrassClump(pos);
         }
     }
 
@@ -280,7 +280,7 @@ public class Chapter6_1 : MonoBehaviour
         Vector3[] points = GetCameraFarClipPlanePoint(cam);
 
         //传的点我们以顺时针传
-        planes[0] = GetPlane(cameraPosition,points[0],points[0]);
+        planes[0] = GetPlane(cameraPosition,points[0],points[2]);
         planes[1] = GetPlane(cameraPosition,points[2],points[3]);
         planes[2] = GetPlane(cameraPosition,points[3],points[1]);
         planes[3] = GetPlane(cameraPosition,points[1],points[0]);

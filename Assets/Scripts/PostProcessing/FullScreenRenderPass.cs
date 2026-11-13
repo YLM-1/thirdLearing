@@ -24,9 +24,17 @@ internal class FullScreenRenderPass : ScriptableRenderPass
     int bloomIteration = 3;
     const int kMaxBloomIteration = 6;
 
+    //Glitch
+    int glitchPass = 0;
+
     public void SetMaterial(Material m)
     {
         material = m;
+    }
+
+    public void SetGlitchPass(int pass)
+    {
+        glitchPass = Mathf.Clamp(pass, 0, 2);
     }
 
     public void SetTarget(RTHandle colorHandle, FullScreenEffect effect, int downSample, int interaction, int dualBoxBlurInteration, int bloomIteration = 3)
@@ -239,7 +247,8 @@ internal class FullScreenRenderPass : ScriptableRenderPass
     void BlitGlitch(CommandBuffer cmd)
     {
         Blitter.BlitCameraTexture(cmd,cameraColorTarget,copiedColor);
-        Blitter.BlitCameraTexture(cmd,copiedColor,cameraColorTarget,material,0);
+        // glitchPass: 0 = RGBSplit，1 = ImageBlock
+        Blitter.BlitCameraTexture(cmd,copiedColor,cameraColorTarget,material,glitchPass);
     }
 
     public void Dispose()

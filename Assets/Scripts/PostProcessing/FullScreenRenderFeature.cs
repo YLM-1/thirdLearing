@@ -67,8 +67,29 @@ internal class FullScreenRenderFeature : ScriptableRendererFeature
 
     [Header("Glitch")]
     public Shader glitchShader;
+    // 0 = RGBSplit，1 = ImageBlock
+    public int glitchPass = 0;
+
+    [Header("RGBSplit")]
     public float amplitude = 2;
     public float amount = 1;
+
+    [Header("ImageBlock")]
+    public int blockSize = 10;
+    public float speed = 1;
+    public float blockSizeA_U = 10;
+    public float blockSizeA_V = 10;
+    public float blockSizeB_U = 20;
+    public float blockSizeB_V = 20;
+    public float blockPowerA = 2;
+    public float blockPowerB = 2;
+    public float offset = 0.1f;
+    public float splitRGBIntensity = 0.1f;
+    [Header("LineBlock")]
+    public float lineWidth = 8;
+    [Range(0,1f)]public float blockAmount = 0.5f;
+    [Range(0,2f)]public float lineOffset = 0.1f;
+    [Range(0,1f)]public float alpha = 0.5f;
 
     Material material;
     FullScreenRenderPass pass;
@@ -80,7 +101,7 @@ internal class FullScreenRenderFeature : ScriptableRendererFeature
         {
             pass = new FullScreenRenderPass
             {
-                renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing
+                renderPassEvent = RenderPassEvent.AfterRenderingPostProcessing
             };
         }
     }
@@ -146,6 +167,21 @@ internal class FullScreenRenderFeature : ScriptableRendererFeature
             case FullScreenEffect.Glitch:
                 material.SetFloat("_Amplitude",amplitude);
                 material.SetFloat("_Amount",amount);
+                material.SetFloat("_BlockSize",blockSize);
+                material.SetFloat("_Speed",speed);
+                material.SetFloat("_BlockSizeA_U",blockSizeA_U);
+                material.SetFloat("_BlockSizeA_V",blockSizeA_V);
+                material.SetFloat("_BlockSizeB_U",blockSizeB_U);
+                material.SetFloat("_BlockSizeB_V",blockSizeB_V);
+                material.SetFloat("_BlockPowerA",blockPowerA);
+                material.SetFloat("_BlockPowerB",blockPowerB);
+                material.SetFloat("_Offset",offset);
+                material.SetFloat("_SplitRGBIntensity",splitRGBIntensity);
+                material.SetFloat("_TimeX",Time.time);
+                material.SetFloat("_LineWidth",lineWidth);
+                material.SetFloat("_BlockAmount",blockAmount);
+                material.SetFloat("_LineOffset",lineOffset);
+                material.SetFloat("_Alpha",alpha);
                 break;
         }
 
@@ -165,6 +201,7 @@ internal class FullScreenRenderFeature : ScriptableRendererFeature
         int ds = (effect == FullScreenEffect.Gaussian || effect == FullScreenEffect.Bloom)? downSample: 1;
 
         pass.SetTarget(renderer.cameraColorTargetHandle, effect, ds, interaction, dualBoxBlurInteration, bloomIteration);
+        pass.SetGlitchPass(glitchPass);
     }
 
     Shader GetShader(FullScreenEffect e)

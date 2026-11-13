@@ -29,13 +29,13 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Curve: 1.31
-    - _Forward: 0.8
-    - _Height: 0.91
-    - _Varation: 0.02
-    - _Width: 0.16
+    - _Curve: 0
+    - _Forward: 1.2
+    - _Height: 0.47
+    - _Varation: 0.0497
+    - _Width: 0.1
     m_Colors:
-    - _BottomColor: {r: 1, g: 1, b: 1, a: 1}
-    - _TopColor: {r: 1, g: 1, b: 1, a: 1}
-    - _VarationColor: {r: 1, g: 1, b: 1, a: 1}
+    - _BottomColor: {r: 0, g: 0.4339623, b: 0.21824983, a: 1}
+    - _TopColor: {r: 0.30526328, g: 1, b: 0, a: 1}
+    - _VarationColor: {r: 0.91194963, g: 0.82104754, b: 0.22081791, a: 1}
   m_BuildTextureStacks: []

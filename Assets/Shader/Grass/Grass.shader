@@ -40,7 +40,7 @@ Shader "Unlit/Grass"
     HLSLINCLUDE
     #pragma target 4.0
     
-    #define _GRASS_SEGMENTS 3 //定义草叶垂直方向的细分段数
+    #define _GRASS_SEGMENTS 5 //定义草叶垂直方向的细分段数
     // PI 已经由 URP 的 Macros.hlsl 定义，这里不要再 define，否则会报 macro redefinition
 
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
