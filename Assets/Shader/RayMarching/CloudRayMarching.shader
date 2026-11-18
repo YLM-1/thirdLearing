@@ -67,7 +67,7 @@ Shader "Hidden/CloudRayMarching"
             {
                 v2f o;
                 o.vertex = TransformObjectToHClip(v.vertex.xyz);
-                o.ray = v.vertex.xyz;
+                o.ray = v.vertex.xyz;//Unity 渲染天空盒时，会把天空盒的盒子放在相机原点上，物体空间里的顶点坐标  =  从相机指向该顶点的方向
 
                 return o;
             }
@@ -106,14 +106,14 @@ Shader "Hidden/CloudRayMarching"
             {
                 if(rd.y>0.001)
                 {
-                    rd = rd/rd.y;
+                    rd = rd/rd.y;//确保最终y方向最终累加步进长度为_CloudHeight
                     float4 c = 0;//颜色
                     float maxStep=64;
                     float3 position = ro + rd * (_CloudHeight-ro.y);
-                    float3 t=rd*_CloudThickness/maxStep;
+                    float3 t=rd*_CloudThickness/maxStep;//单个步进的向量
                     //限制单步长度：掠射角下 length(t)远处几步就糊满
                     float stepLength=min(length(t),_MaxStepLength);
-                    float stepOpacity=(_CloudOpacity * stepLength)/ (1 + _CloudOpacity * stepLength);
+                    float stepOpacity=(_CloudOpacity * stepLength)/ (1 + _CloudOpacity * stepLength);//stepLength越大，获得初始透明度越大,
 
                     //和天空颜色的混合
                     float farCloudColorAmount=1-1/(_FarCloudColorAmount*length(rd)+1);
@@ -130,7 +130,7 @@ Shader "Hidden/CloudRayMarching"
                         float2 shapeUV = (position.xz+_CloudSpeed*_Time.y)/(_CloudScale.xy*max(_ShapeScale,0.001));
                         float shape = SAMPLE_TEXTURE2D(_CloudTex, sampler_CloudTex, shapeUV).r;
 
-                        //细节只做轻微扰动，避免破坏覆盖率
+                        //detail-0.5是为了做双向扰动，范围从0-1,到-0.5-0.5既可以增加细节也可以减少,乘shape是为了只在大尺度云的地方产生
                         float density = shape + shape*(detail-0.5)*_DetailAmount;
                   
                         //覆盖率：低于阈值的区域直接是晴空

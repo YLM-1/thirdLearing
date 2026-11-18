@@ -8,7 +8,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Shader/RimSaple.unity
     guid: 99c9720ab356a0642a771bea13969a05
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Demo/Demo_01_Island.unity
     guid: 4e75b884914b04145a5d5759e616973e
   m_configObjects: {}

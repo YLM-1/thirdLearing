@@ -29,16 +29,16 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _RandomDirection: 0.656
+    - _RandomDirection: 0.674
     - _ShowNormal: 0
     - _Smoothness: 8
     - _SpecularIntensity: 0.5
     - _SpecularPower: 32
-    - _WaveCount: 5
-    - _WaveSpeed: 0.84
+    - _WaveCount: 10
+    - _WaveSpeed: 0
     - _WavelengthMax: 8
-    - _WavelengthMin: 2.42
-    - _WavesteepnessMax: 1.83
+    - _WavelengthMin: 2.44
+    - _WavesteepnessMax: 2.79
     - _WavesteepnessMin: 0.08
     m_Colors:
     - _BaseColor: {r: 0.25, g: 0.55, b: 0.8, a: 1}

@@ -39,23 +39,28 @@ float _FlowNormalStrength;
 
 //Foam
 float4 _FoamColor;
-float _FoamContrast;
-float _FoamCoverage;
-float4 _FoamFlow;
 float _FoamScope;
 float _FoamPower;
+float _FoamWidth;
 float _FoamInterval;
 float _FoamSpeed;
-float _FoamIntensity;
+float _FoamDistortion;
+float _FoamWidthStep;
 float _FoamCrestHeight;
-float _FoamCrestScale;
+float _FoamCrestSoft;
+float _FoamCrestNoise;
+float _FoamCrestNoiseScale;
 float _FoamCrestIntensity;
+float _FoamCrestJacobian;
+
+//Caustics
+float _CausticsSpeed;
+float _CausticsDispersion;
+float _CausticsDepth;
+float _CausticsIntensity;
 
 TEXTURE2D(_ReflectionRT);
 SAMPLER(sampler_ReflectionRT);
-
-//TEXTURE2D(_RefractionRT);
-//SAMPLER(sampler_RefractionRT);
 
 TEXTURE2D(_WaveNormalMap);
 SAMPLER(sampler_WaveNormalMap);
@@ -65,13 +70,16 @@ TEXTURE2D(_FlowMap);
 SAMPLER(sampler_FlowMap);
 float4 _FlowMap_ST;
 
-TEXTURE2D(_NormalTex);
-SAMPLER(sampler_NormalTex);
-float4 _NormalTex_ST;
+TEXTURE2D(_FoamNoiseMap);
+SAMPLER(sampler_FoamNoiseMap);
 
 TEXTURE2D(_FoamTex);
 SAMPLER(sampler_FoamTex);
 float4 _FoamTex_ST;
+
+TEXTURE2D(_CausticsTex);
+SAMPLER(sampler_CausticsTex);
+float4 _CausticsTex_ST;
 
 //Gerstner
 int _WaveCount;
@@ -161,7 +169,7 @@ struct v2f
     float3 tangent:TEXCOORD3;
     float3 binormal:TEXCOORD4;
     float3 worldPos:TEXCOORD5; 
-    float3 foamData:TEXCOORD6;   //xy = 位移前的世界 XZ（泡沫 UV 用）, z = 波高（浪尖白沫用）
+    float4 foamData:TEXCOORD6;   //xy = 位移前的世界 XZ（泡沫 UV 用）, z = 波高, w = Jacobian（浪尖白沫用）
 };
 
 v2f vert(appdata v)
@@ -175,8 +183,12 @@ v2f vert(appdata v)
         _WavesteepnessMax, _WavesteepnessMin, _RandomDirection);
 
     o.worldPos = gerstner.positionWS;
-    //泡沫用：xy=位移前的世界XZ（纹理不会随波浪游动）, z=波高（浪尖白沫）
-    o.foamData = float3(positionWS.xz, gerstner.positionWS.y - positionWS.y);
+    //泡沫用：xy=位移前的世界XZ（纹理不会随波浪游动）, z=波高, w=Jacobian
+    //Jacobian = 水面在水平方向被压缩的程度：<1 表示被挤压（浪尖/折叠处），真实白沫就出现在这里
+    //tangent=(1+T.x, T.y, T.z)、binormal=(B.x, B.y, 1+B.z)，
+    //所以 J = (1+T.x)(1+B.z) - B.x*T.z 可以直接写成下面这一行
+    float jacobian = gerstner.tangent.x * gerstner.binormal.z - gerstner.binormal.x * gerstner.tangent.z;
+    o.foamData = float4(positionWS.xz, gerstner.positionWS.y - positionWS.y, jacobian);
     o.vertex = TransformWorldToHClip(gerstner.positionWS);
     //ComputeScreenPos 需要裁剪空间坐标，否则 screenUV / screenPos.w 都是错的
     o.screenPos=ComputeScreenPos(o.vertex);
@@ -199,8 +211,10 @@ float3 Normal_TS(float2 uv,float speed,float direction,Texture2D tex,SamplerStat
 float3 FresnelSchlick(float cosTheta, float3 F0)
 {
     //Schlick: F0 + (1-F0)*(1-cos)^_FresnelPower
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, _FresnelPower);
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5);
 }
+
+
 
 float4 frag(v2f i):SV_TARGET
 {
@@ -229,36 +243,40 @@ float4 frag(v2f i):SV_TARGET
 
     //FlowMap：两张法线按人字形权重交替滚动
     #ifdef _USE_FLOWMAP
-        float2 flowVector = SAMPLE_TEXTURE2D(_FlowMap,sampler_FlowMap,i.uv).rg;
+        float2 flowVector = SAMPLE_TEXTURE2D(_FlowMap,sampler_FlowMap,i.uv).rg*2-1;
         flowVector*=_FlowIntensity;
         float flowSpeed=_FlowSpeed*0.1;
         float progressA=frac(_Time.y*flowSpeed);
         float progressB=frac(_Time.y*flowSpeed+0.5);
         //你退我进，你进我退
-        float weightDistortion1= 1 - abs(1-2*progressA); //1-2*progressA->[1,-1],abs->[1,0,1],1->[0,1,0],形成人字
-        float weightDistortion2 = 1 - abs(1-2*progressB);
+        // float weightDistortion1= 1 - abs(1-2*progressA); //1-2*progressA->[1,-1],abs->[1,0,1],1->[0,1,0],形成人字
+        // float weightDistortion2 = 1 - abs(1-2*progressB);
+        float lerpWeight = abs((0.5-progressA)/0.5);
 
         float2 flowOffsetA = flowVector * progressA;
-        float2 flowOffsetB = flowVector * progressB+0.5;
+        float2 flowOffsetB = flowVector * progressB;
 
-        float3 normal1 = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalTex, sampler_NormalTex, TRANSFORM_TEX(i.uv + flowOffsetA, _NormalTex)), _NormalScale).rgb;
-        float3 normal2 = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalTex, sampler_NormalTex, TRANSFORM_TEX(i.uv + flowOffsetB, _NormalTex)), _NormalScale).rgb;
-        float3 normal = normal1 * weightDistortion1 + normal2 * weightDistortion2;
+        float3 normal1 = UnpackNormalScale(SAMPLE_TEXTURE2D(_WaveNormalMap, sampler_WaveNormalMap, TRANSFORM_TEX(i.uv + flowOffsetA, _WaveNormalMap)), _NormalScale).rgb;
+        float3 normal2 = UnpackNormalScale(SAMPLE_TEXTURE2D(_WaveNormalMap, sampler_WaveNormalMap, TRANSFORM_TEX(i.uv + flowOffsetB, _WaveNormalMap)), _NormalScale).rgb;
+        // float3 normal = normal1 * weightDistortion1 + normal2 * weightDistortion2;
+        float3 normal = lerp(normal1,normal2,lerpWeight);
         float3 normal_B=normalize(mul(normal,TBN));
 
         //FlowMap法线只叠加一部分，避免盖过波浪法线
         float3 normalWS=normalize(normal_A+normal_B*lerp(0,0.5,_FlowNormalStrength));
     #else
-        float3 normalWS=normal_A;
+        //必须归一化：normal_A 乘过 _WaveNormalIntensity，不归一会让 NdotV/菲涅尔跟着强度一起变
+        float3 normalWS=normalize(normal_A);
     #endif
 
     //NdotV 提前算：菲涅尔和反射粗糙度都要用（用扰动后的法线，所以反射强度/模糊会跟着波浪变化）
     float NdotV = saturate(dot(normalWS,viewDir));
 
     //Reflection
-    //扰动方向用视图空间（投影到屏幕平面）：否则相机绕 Y 一转，水面的扰动方向会跟着一起转
-    //注意：视图空间 +y 朝上，screenPos 的 v 也是朝上，所以这里不用取负
-    float2 distortVS = TransformWorldToViewDir(normalWS).xy;
+    float3 planeNormalWS = normalize(TransformObjectToWorldNormal(float3(0, 1, 0)));
+    //去掉恒定偏置后偏移量会小一个数量级，这里补回手感（可调）
+    const float distortionGain = 5.0;
+    float2 distortVS = TransformWorldToViewDir(normalize(normalWS) - planeNormalWS).xy * distortionGain;
     float2 reflectOffset = distortVS * _ReflectionDistortion;
     float2 reflectUV = screenUV + reflectOffset;
     reflectUV.x = 1.0 - reflectUV.x;   //左右翻转要放在扰动之后
@@ -306,7 +324,7 @@ float4 frag(v2f i):SV_TARGET
     float3 specularColor = lightColor*specular*_WaterSpecularColor.rgb * shadowAtten;
 
     //Fresnel结合
-    float3 F = FresnelSchlick(NdotV, _FresnelF0);
+    float3 F = FresnelSchlick(NdotV, 0.02);
     float3 reflectionWeight = saturate(F * _ReflectionIntensity);
     //反射和折射按菲涅尔混合
     float3 waterColor = lerp(refractColor, reflectColor, reflectionWeight);
@@ -316,23 +334,62 @@ float4 frag(v2f i):SV_TARGET
 
     //Foam
     float foamMask = pow(saturate(1.0 - depthDiff / max(_FoamScope, 0.0001)), _FoamPower);
-    float2 foamUV = TRANSFORM_TEX(i.foamData.xy, _FoamTex) + _Time.y * _FoamFlow.xy;
-    float foamNoise = SAMPLE_TEXTURE2D(_FoamTex, sampler_FoamTex, foamUV).r;
-    //Contrast 把纹理的细纹压出来，Coverage 补一点底色（否则只剩几根线）
-    float foamShape = saturate(foamNoise * _FoamContrast + _FoamCoverage);
+    float foam1 = _FoamWidth*sin(_FoamInterval*foamMask - _Time.y*_FoamSpeed)*0.5+0.5;
+    float noise = SAMPLE_TEXTURE2D(_FoamNoiseMap,sampler_FoamNoiseMap,i.uv).r*_FoamDistortion;
+    foam1 *= foamMask*noise;
 
-    //近岸"往岸上推"的呼吸
-    float foamPhase = depthDiff * _FoamInterval + _Time.y * _FoamSpeed;
-    float foamPulse = lerp(0.6, 1.0, (sin(foamPhase) * 0.5 + 0.5));
+    //岸边一直存在的泡沫
+    float threshold = _FoamWidthStep+sin(_Time.y*3)*0.05;
+    float foam2 =step(threshold,foamMask);
 
-    //4.浪尖白沫：波高超过 _FoamCrestHeight 就出沫，和近岸遮罩取 max
-    float crest = saturate((i.foamData.z - _FoamCrestHeight) * _FoamCrestScale);
-    float foamAmount = max(foamMask * foamPulse, crest * _FoamCrestIntensity);
+    float foamShore = saturate(foam2 + foam1);
 
-    float foam = saturate(foamAmount * foamShape * _FoamIntensity);
-    //泡沫也要吃光照和阴影
-    float3 foamLit = _FoamColor.rgb * (0.35 + lightColor * NdotL * shadowAtten);
-    finalColor = lerp(finalColor, foamLit, foam);
+    //浪尖白沫：两个判据取较大者
+    //1) 波高越过门槛（"高"的地方）
+    float crestByHeight = smoothstep(_FoamCrestHeight, _FoamCrestHeight + max(_FoamCrestSoft, 1e-4), i.foamData.z);
+    //2) Jacobian < 1：水面被水平压缩 → 真实白沫出现的判据，比"高"更早也更准
+    float crestByJac = saturate((1.0 - i.foamData.w) * _FoamCrestJacobian);
+    float crest = max(crestByHeight, crestByJac);
+
+    //噪声打碎：低频噪声当"团块遮罩"（有/没有），高频只做内部碎纹（不压整体亮度）
+    //世界坐标采样 + 慢速漂移，泡沫才会成团而不是沿浪脊一条线
+    float2 crestUV = i.foamData.xy * _FoamCrestNoiseScale + _Time.y * float2(0.012, 0.019);
+    float crestNoiseA = SAMPLE_TEXTURE2D(_FoamNoiseMap, sampler_FoamNoiseMap, crestUV).r;
+    float crestNoiseB = SAMPLE_TEXTURE2D(_FoamNoiseMap, sampler_FoamNoiseMap, crestUV * 4.0).r;
+    float crestPatch = saturate((crestNoiseA - (1.0 - _FoamCrestNoise)) * 6.0);
+    crest *= crestPatch;
+    crest *= lerp(0.55, 1.0, crestNoiseB);
+    crest = saturate(crest * _FoamCrestIntensity);
+
+    //两种泡沫取并集（max）：重叠时不会叠成双倍亮度
+    float foam = saturate(max(foamShore, crest));
+
+    //焦散
+    float3 underWaterWorld = _WorldSpaceCameraPos.xyz + normalize(i.worldPos - _WorldSpaceCameraPos)*depthValue;
+    float2 cuv = underWaterWorld.xz*_CausticsTex_ST.xy;
+    float2 causticsUVA = cuv + _Time.y * _CausticsSpeed*float2(1,0.35);
+    float2 causticsUVB = cuv * 3 + _Time.y * _CausticsSpeed*float2(-0.4,1);
+    float c1 = SAMPLE_TEXTURE2D(_CausticsTex,sampler_CausticsTex,causticsUVA).r;
+    float c2 = SAMPLE_TEXTURE2D(_CausticsTex,sampler_CausticsTex,causticsUVB).r;
+    float caustics = saturate(c1*c2*2);
+    //色散
+    float2 disp = (c1-c2)*_CausticsDispersion;
+    float r1 = SAMPLE_TEXTURE2D(_CausticsTex,sampler_CausticsTex,causticsUVA + _CausticsDispersion).r;
+    float g1 = SAMPLE_TEXTURE2D(_CausticsTex,sampler_CausticsTex,causticsUVA).r;
+    float b1 = SAMPLE_TEXTURE2D(_CausticsTex,sampler_CausticsTex,causticsUVA - _CausticsDispersion).r;
+
+    // float r2 = SAMPLE_TEXTURE2D(_CausticsTex,sampler_CausticsTex,causticsUVB + _CausticsDispersion).r;
+    // float g2 = SAMPLE_TEXTURE2D(_CausticsTex,sampler_CausticsTex,causticsUVB).r;
+    // float b2 = SAMPLE_TEXTURE2D(_CausticsTex,sampler_CausticsTex,causticsUVB - _CausticsDispersion).r;
+    // float3 causticsRGB = float3(r1,g1,b1)*float3(r2,g2,b2);
+    float3 causticsRGB = float3(r1,g1,b1)*caustics;
+    causticsRGB.g *= 0.1;
+    causticsRGB.rb *= 2;
+    
+    float fade = saturate(1-depthValue/_CausticsDepth);
+    float3 causticsColor = causticsRGB*fade*_CausticsIntensity;
+
+    finalColor = lerp(finalColor,_FoamColor.rgb,foamShore)+causticsColor*20;
 
     return float4(finalColor,1);
 }

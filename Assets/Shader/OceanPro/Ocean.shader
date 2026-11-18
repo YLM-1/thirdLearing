@@ -42,31 +42,39 @@ Shader "Unlit/Ocean"
         _FlowMap("Flow Map",2D)="black"{}
         _FlowIntensity("Flow Intensity",Range(0,1))=0.5
         _FlowSpeed("Flow Speed",Float)=1
-        _NormalTex("Flow Normal Map",2D)="bump"{}
         _NormalScale("Flow Normal Scale",Range(0,2))=1
         _FlowNormalStrength("Flow Normal Strength",Range(0,1))=0.5
 
         [Header(Foam)]
-        _FoamColor("Foam Color",Color)=(1,1,1,1)
-        _FoamTex("Foam Texture",2D)="white"{}
-        _FoamContrast("Foam Contrast",Range(0,8))=2
-        _FoamCoverage("Foam Coverage",Range(0,1))=0.2
-        _FoamFlow("Foam Flow (UV/s)",Vector)=(0.01,0.015,0,0)
+        _FoamColor("Foam Color",Color) = (1,1,1,1)
+        _FoamWidth("Foam Width",float) = 1
+        _FoamNoiseMap("Foam Noise Map",2D) = "white"{}
+        _FoamDistortion("Foam Distortion",Range(0,1)) = 0.5
+        _FoamWidthStep("Foam Width Step",Range(0,1)) = 1
         _FoamScope("Foam Scope (m)",Range(0,50))=6
-        _FoamPower("Foam Power",Range(1,8))=2
-        _FoamIntensity("Foam Intensity",Range(0,3))=1.78
-        _FoamCrestHeight("Foam Crest Height (m)",Range(0,1.5))=0.2
-        _FoamCrestScale("Foam Crest Scale",Range(0,20))=8
-        _FoamCrestIntensity("Foam Crest Intensity",Range(0,2))=0.8
+        _FoamPower("Foam Power",Float)=2
         _FoamInterval("Foam Interval",Float)=1
         _FoamSpeed("Foam Speed",Float)=2
+        _FoamCrestHeight("Foam Crest Height",Float) = 1
+        _FoamCrestSoft("FoamCrest Soft",Float) = 1
+        _FoamCrestNoise("Foam Crest Noise",Range(0,1)) = 0.6
+        _FoamCrestNoiseScale("Foam Crest Noise Scale",Float) = 0.05
+        _FoamCrestIntensity("Foam Crest Intensity",Range(0,2)) = 1
+        _FoamCrestJacobian("Foam Crest Jacobian",Float) = 8
+
+        [Header(Caustics)]
+        _CausticsTex("CausticTex",2D) = "white"{}
+        _CausticsSpeed("Caustics Speed",Float) = 0.5
+        _CausticsDispersion("CausticsDispersion",Range(0,1))=0.5
+        _CausticsDepth("CausticsDepth",Float)= 10
+        _CausticsIntensity("CausticsIntensity",Range(0,1))=0.5
 
         [Header(Gerstner)]
         _WaveCount("Wave Count",Float)=10
         _WavelengthMax("Wavelength Max",Float)=160
         _WavelengthMin("Wavelength Min",Float)=45
-        _WavesteepnessMax("Steepness Max",Range(0,1))=0.1
-        _WavesteepnessMin("Steepness Min",Range(0,1))=0
+        _WavesteepnessMax("Steepness Max",Range(0,3))=0.1
+        _WavesteepnessMin("Steepness Min",Range(0,3))=0
         _RandomDirection("Random Direction",Range(0,1))=0.5
         _GerstnerSpeed("Gerstner Speed",Float)=1
         _Direction("Wave Direction",Vector)=(1,0,0,0)
